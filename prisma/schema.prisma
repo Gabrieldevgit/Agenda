@@ -1,0 +1,189 @@
+// Tempo — production schema (Construction Notebook §7-8)
+// Prisma runs only on the server. Client code never imports this.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // pooled runtime connection
+  directUrl = env("DIRECT_URL")     // direct connection, migrations only
+}
+
+enum MembershipRole {
+  owner
+  admin
+  member
+  viewer
+}
+
+enum EventStatus {
+  confirmed
+  tentative
+  cancelled
+}
+
+enum ReminderChannel {
+  in_app
+  email
+}
+
+/// Profile row linked 1:1 to the Supabase Auth user (auth.users.id).
+model UserProfile {
+  id              String   @id // matches Supabase auth.users.id
+  displayName     String   @map("display_name")
+  avatarUrl       String?  @map("avatar_url")
+  locale          String   @default("en-US")
+  defaultTimezone String   @default("UTC") @map("default_timezone")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  ownedWorkspaces Workspace[]  @relation("WorkspaceOwner")
+  memberships     Membership[]
+  createdEvents   Event[]      @relation("EventCreator")
+  attendances     Attendee[]
+  reminders       Reminder[]
+  auditLogs       AuditLog[]
+
+  @@map("user_profiles")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  ownerId   String   @map("owner_id")
+  owner     UserProfile @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships Membership[]
+  calendars   Calendar[]
+  auditLogs   AuditLog[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String         @id @default(cuid())
+  workspaceId String         @map("workspace_id")
+  userId      String         @map("user_id")
+  role        MembershipRole @default(member)
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Calendar {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  color       String   // token name, e.g. "work" | "personal" | hex
+  isDefault   Boolean  @default(false) @map("is_default")
+  isArchived  Boolean  @default(false) @map("is_archived")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    Event[]
+
+  @@index([workspaceId])
+  @@map("calendars")
+}
+
+model Event {
+  id               String      @id @default(cuid())
+  calendarId       String      @map("calendar_id")
+  createdById      String      @map("created_by_id")
+  title            String
+  description      String?
+  location         String?
+  startAt          DateTime    @map("start_at") // timestamptz — actual instant
+  endAt            DateTime    @map("end_at")
+  timezone         String      // IANA zone the event was authored in, e.g. "America/Toronto"
+  allDay           Boolean     @default(false) @map("all_day")
+  status           EventStatus @default(confirmed)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  deletedAt        DateTime?   @map("deleted_at") // soft delete, powers Undo
+
+  calendar        Calendar         @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  createdBy       UserProfile      @relation("EventCreator", fields: [createdById], references: [id])
+  recurrenceRule  RecurrenceRule?
+  attendees       Attendee[]
+  reminders       Reminder[]
+
+  @@index([calendarId, startAt, endAt])
+  @@index([startAt])
+  @@map("events")
+}
+
+model RecurrenceRule {
+  id        String   @id @default(cuid())
+  eventId   String   @unique @map("event_id")
+  rrule     String   // RFC 5545 RRULE string
+  timezone  String
+  dtstart   DateTime
+  until     DateTime?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("recurrence_rules")
+}
+
+model Attendee {
+  id             String   @id @default(cuid())
+  eventId        String   @map("event_id")
+  userId         String?  @map("user_id") // null for external, email-only invitees
+  email          String
+  displayName    String?  @map("display_name")
+  responseStatus String   @default("needs_action") @map("response_status")
+  isOptional     Boolean  @default(false) @map("is_optional")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  event Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  UserProfile? @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, email])
+  @@map("attendees")
+}
+
+model Reminder {
+  id            String          @id @default(cuid())
+  eventId       String          @map("event_id")
+  userId        String          @map("user_id")
+  minutesBefore Int             @map("minutes_before")
+  channel       ReminderChannel @default(in_app)
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  event Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  UserProfile @relation(fields: [userId], references: [id])
+
+  @@map("reminders")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  actorUserId String   @map("actor_user_id")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  action      String
+  metadata    Json?    @map("metadata_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor     UserProfile @relation(fields: [actorUserId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_logs")
+}
