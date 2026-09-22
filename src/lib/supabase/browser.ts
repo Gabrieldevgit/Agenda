@@ -12,6 +12,7 @@ export function createSupabaseBrowserClient() {
       auth: {
         signInWithPassword: async () => ({ data: null, error: { message: "Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and keys or use TEMPO_DEMO_MODE=true." } }),
         signUp: async () => ({ data: null, error: { message: "Supabase not configured." } }),
+        signInWithOAuth: async () => ({ data: null, error: { message: "Supabase not configured." } }),
         getUser: async () => ({ data: { user: null }, error: null }),
         getSession: async () => ({ data: { session: null }, error: null }),
         exchangeCodeForSession: async () => ({ data: null, error: null }),
