@@ -4,7 +4,7 @@
  * and the view components together. Implements Notebook v2/v3 corrections plus
  * prototype chrome parity (brand, mini calendar, UpNext, all-day row, tabs/FAB, keyboard).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { addDays, addMonths, mondayOf, titleForView, toInstant } from "@/lib/dates/date-utils";
 import { useCalendarEvents, useEventMutations } from "../hooks/useCalendarEvents";
 import { useCalendars } from "../hooks/useCalendars";
@@ -13,10 +13,13 @@ import { MonthView } from "./MonthView";
 import { AgendaView } from "./AgendaView";
 import { MiniCalendar } from "./MiniCalendar";
 import { UpNext } from "./UpNext";
+import { GlobalSearch } from "./GlobalSearch";
 import { EventDialog } from "@/features/events/components/EventDialog";
-import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, SearchIcon, MenuIcon, SettingsIcon } from "@/lib/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
-import type { CalendarSummary, CalendarView, EventDraft } from "../types";
+import { PrintDialog } from "@/features/print/components/PrintDialog";
+import { useRealtimeEvents } from "../hooks/useRealtimeEvents";
+import type { CalendarSummary, CalendarView, EventDraft, EventRecord } from "../types";
 import { dayKey } from "@/lib/dates/date-utils";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -44,7 +47,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const [toast, setToast] = useState<{ msg: string; undoId?: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const [printOpen, setPrintOpen] = useState(false);
 
   // Debounce search (Notebook v2 §17/39)
   useEffect(() => {
@@ -136,6 +139,28 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     setDialogDraft(event);
   }
 
+  /** Search bar "Jump to day" — go to that civil day in Day view. */
+  function jumpToDay(dateKeyStr: string) {
+    const [y, m, d] = dateKeyStr.split("-").map(Number);
+    setAnchor(new Date(y!, m! - 1, d!));
+    setView("day");
+    setSidebarOpen(false);
+  }
+
+  /** Search bar event result — jump to its day and open it, even if it's outside the loaded range. */
+  function jumpToEvent(event: EventRecord) {
+    const [y, m, d] = dayKey(event.startAt, timeZone).split("-").map(Number);
+    setAnchor(new Date(y!, m! - 1, d!));
+    setView("day");
+    setSidebarOpen(false);
+    setDialogIsNew(false);
+    setDialogDraft(event);
+  }
+
+  // Realtime (Supabase Postgres Changes): other clients' creates/edits/deletes
+  // in this workspace's visible calendars refresh this view live.
+  useRealtimeEvents({ workspaceId, calendarIds: calendars.map((c) => c.id) });
+
   function handleSave(draft: EventDraft) {
     setDialogError("");
     const opts = {
@@ -195,7 +220,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       else if (k === "c") { e.preventDefault(); openNewEventAt(createDateKey, 9 * 60); }
       else if (k === "j" || e.key === "ArrowRight") handleNext();
       else if (k === "k" || e.key === "ArrowLeft") handlePrev();
-      else if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
+      else if (e.key === "/") { e.preventDefault(); document.getElementById("global-search-input")?.focus(); }
       else if (e.key === "Escape" && sidebarOpen) setSidebarOpen(false);
     }
     window.addEventListener("keydown", onKey);
@@ -251,7 +276,16 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         </div>
         <h1 id="title" aria-live="polite">{title}</h1>
         <div style={{ flex: 1 }} />
-        <label className="search"><SearchIcon size={16} style={{ color: "var(--muted)" }} /><input ref={searchRef} type="search" placeholder="Search events" aria-label="Search events" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} /></label>
+        <GlobalSearch
+          value={searchInput}
+          onChange={setSearchInput}
+          workspaceId={workspaceId}
+          calendarIds={visibleCalendars}
+          calendars={calendars}
+          timeZone={timeZone}
+          onJumpToDay={jumpToDay}
+          onJumpToEvent={jumpToEvent}
+        />
         <div className="seg" role="group" aria-label="View">
           {([
             ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon],
@@ -261,6 +295,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
             </button>
           ))}
         </div>
+        <button className="icon" aria-label="Print" title="Print" onClick={() => setPrintOpen(true)}><PrintIcon /></button>
         <button className="icon" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)}><SettingsIcon /></button>
         <button className="btn primary" onClick={() => openNewEventAt(createDateKey, 9 * 60)} disabled={!calendars.length} title={!calendars.length ? "Create a calendar first" : undefined} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={16} /> Create</button>
       </header>
@@ -301,6 +336,9 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
             ))}
           </div>
           <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+            <button className="calrow" onClick={() => setPrintOpen(true)} style={{ ["--c" as string]: "var(--muted)" } as unknown as React.CSSProperties}>
+              <span className="cb" style={{ display: "grid", placeItems: "center", borderColor: "var(--muted)" }}><PrintIcon size={12} /></span> Print…
+            </button>
             <button className="calrow" onClick={() => setSettingsOpen(true)} style={{ ["--c" as string]: "var(--muted)" } as unknown as React.CSSProperties}>
               <span className="cb" style={{ display: "grid", placeItems: "center", borderColor: "var(--muted)" }}><SettingsIcon size={12} /></span> Settings
             </button>
@@ -355,6 +393,15 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         externalError={dialogError}
       />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <PrintDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        workspaceId={workspaceId}
+        calendars={calendars}
+        visibleCalendars={visibleCalendars}
+        timeZone={timeZone}
+        anchor={anchor}
+      />
 
       {toast && (
         <div role="status" aria-live="polite" className="toast">

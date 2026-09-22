@@ -24,6 +24,21 @@ Production calendar built from `tempo-construction-notebook` + `tempo-agenda.htm
 * `EventDialog` — Calendar picks, Date/Start/End/End-date/Timezone, All-day, Location, Notes, `isSaving` keeps dialog open until success
 * Mobile — `side` drawer + `backdrop`, `tabs` 4-col, `fab`, responsive `@media 760px`
 
+**Search (events + days):**
+* Header search bar (`src/features/calendar/components/GlobalSearch.tsx`) — typing still filters the on-screen range (existing `q` behavior) and now also opens a dropdown with two sections:
+  * **Days** — client-side parsing (`src/features/calendar/lib/search-date-parse.ts`) of "today"/"tomorrow"/"yesterday", `yyyy-MM-dd`, `MM/dd[/yyyy]`, weekday names ("monday", "next friday"), and "Month Day[, Year]" — click (or Enter) jumps straight to that day in Day view
+  * **Events** — backed by `GET /api/events/search` (`event-repository.searchGlobal` / `event-service.searchEventsGlobal`), which is *not* bounded by the visible range, so a match next month or last year still shows up, sorted by closeness to now; selecting one jumps to its day and opens it
+  * Keyboard: `↓/↑` to move, `Enter` to select, `Esc` to close; `/` still focuses the box
+
+**Print:**
+* `PrintIcon` button in the header (and a "Print…" row in the mobile sidebar) opens `src/features/print/components/PrintDialog.tsx`
+* Choose scope — **Day / Week / Month / Agenda (30 days) / Custom range** — a date (or start+end for a custom range), which calendars to include, and whether to include location/notes
+* Fetches events for that exact range via the existing `/api/events` endpoint, then `src/features/print/components/PrintPreview.tsx` renders a print-only layout (day list / week columns / month grid) portaled to `<body>` and triggers `window.print()`; print-only styling lives in the `@media print` block of `globals.css`
+
+**Realtime:**
+* `src/features/calendar/hooks/useRealtimeEvents.ts` subscribes to Supabase Postgres Changes on `public.events`, scoped to the visible calendars (`calendar_id=in.(...)`), and invalidates the `useCalendarEvents` cache on any insert/update/delete — so a change made in one tab/device shows up live in another without a manual refresh
+* Requires `supabase/migrations/0002_enable_realtime.sql` to be applied (adds `events` to the `supabase_realtime` publication); RLS from `0001_enable_rls.sql` still governs which rows a given client is allowed to receive
+
 **Security:**
 * `supabase/migrations/0001_enable_rls.sql` — RLS enabled on 8 tables + policies for `user_profiles`, `workspaces`, `memberships`, `calendars`, `events`, `attendees`, `reminders`, `audit_logs`, `recurrence_rules` (viewer read-only, member write, `owner|admin` manage calendars); `REVOKE anon`, partial unique `calendars_one_default_per_workspace`
 * `src/lib/dates/date-utils.ts` — civil `addDays(date, n, timeZone)`, `mondayOf`, `addMonths`, `toInstant` (no dead DST round-trip), `titleForView` agenda `Next 30 days`, half-open `[start,end)` in `event-repository.ts`
@@ -40,6 +55,6 @@ npm run dev
 
 ## Next (intentionally deferred per §31)
 
-Recurrence `RRULE` expansion + exceptions, Reminder delivery (background queue), Attendee invite flow, Realtime `supabase Realtime` for shared calendars, external sync (`IntegrationAccount`), billing (`Plan/Subscription`).
+Recurrence `RRULE` expansion + exceptions, Reminder delivery (background queue), Attendee invite flow, external sync (`IntegrationAccount`), billing (`Plan/Subscription`).
 
 See `tempo-construction-notebook-v3.md` for the hardening → RLS → recurrence → collaboration sequence.

@@ -50,6 +50,19 @@ h1 { font: 700 22px/1.1 var(--font-display); letter-spacing: -.02em; margin: 0 0
 .search { display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); width: 220px; }
 .search input { border: 0; background: transparent; outline: 0; width: 100%; }
 .search:focus-within { outline: 2px solid var(--accent); }
+.gsearch { position: relative; }
+.gsearch-clear { border: 0; background: transparent; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--muted); flex: none; }
+.gsearch-clear:hover { background: var(--hover); color: var(--ink); }
+.gsearch-drop { position: absolute; top: calc(100% + 8px); right: 0; width: 360px; max-height: 70vh; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 8px; z-index: 40; }
+.gsearch-section + .gsearch-section { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.gsearch-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 4px 8px; }
+.gsearch-empty { margin: 0; padding: 4px 8px 8px; font-size: 12px; color: var(--muted); }
+.gsearch-row { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; text-align: left; padding: 8px; border-radius: 10px; }
+.gsearch-row:hover, .gsearch-row.active { background: var(--hover); }
+.gsearch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.gsearch-col { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.gsearch-title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsearch-sub { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seg { display: flex; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 3px; }
 .seg button { border: 0; background: transparent; border-radius: 16px; height: 30px; padding: 0 14px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
@@ -195,3 +208,41 @@ main { flex: 1; min-width: 0; background: var(--surface); border-radius: 20px 0 
 }
 @media (min-width:761px){ .m-today { display: none; } }
 @media (prefers-reduced-motion:reduce){ .side { transition: none; } }
+
+/* ---------------------------------------------------------------------
+ * Print (day / week / month / agenda / custom range — PrintDialog + PrintPreview)
+ * #print-root is portaled to <body>, outside `.app`, and stays invisible
+ * on screen; `body.printing` + @media print together decide what shows.
+ * ------------------------------------------------------------------- */
+#print-root { display: none; }
+.pr-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.pr-mark { width: 20px; height: 20px; border-radius: 6px; background: #3D3DE0; flex: none; }
+.pr-head h1 { margin: 0; font: 700 20px var(--font-display); }
+.pr-head p { margin: 2px 0 0; font-size: 11px; color: #666; }
+.pr-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; font-size: 11px; color: #444; }
+.pr-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.pr-legend-item i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.pr-ev { display: flex; gap: 8px; padding: 4px 0 4px 8px; border-left: 3px solid #999; margin: 3px 0; break-inside: avoid; }
+.pr-ev-time { width: 76px; flex: none; font-size: 11px; color: #555; font-weight: 600; }
+.pr-ev-body { display: flex; flex-direction: column; min-width: 0; }
+.pr-ev-title { font-weight: 600; font-size: 12.5px; }
+.pr-ev-loc, .pr-ev-desc { font-size: 11px; color: #555; }
+.pr-empty { font-size: 11px; color: #888; margin: 2px 0 8px; }
+.pr-daylist .pr-day { margin-bottom: 16px; break-inside: avoid; }
+.pr-day-h { font: 700 15px var(--font-display); border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 6px; }
+.pr-day-h.small { font-size: 12px; }
+.pr-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.pr-weekcol { border: 1px solid #ddd; border-radius: 6px; padding: 6px; break-inside: avoid; }
+.pr-month { display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid #ccc; border-left: 1px solid #ccc; }
+.pr-mh { font-size: 10px; font-weight: 700; color: #666; text-align: center; padding: 4px 0; border-right: 1px solid #ccc; border-bottom: 1px solid #ccc; }
+.pr-mcell { min-height: 84px; border-right: 1px solid #ccc; border-bottom: 1px solid #ccc; padding: 3px 4px; break-inside: avoid; }
+.pr-mcell.out { background: #f5f5f5; color: #999; }
+.pr-mnum { font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+.pr-chip { font-size: 9.5px; line-height: 1.3; border-left: 2px solid #999; padding-left: 3px; margin-bottom: 1px; overflow: hidden; }
+
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; }
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing #print-root { display: block !important; color: #111; font: 12px/1.4 var(--font-body); }
+}

@@ -119,3 +119,16 @@ export async function searchEvents(
   const rows = await eventRepository.searchInRange({ workspaceId, calendarIds, rangeStart, rangeEnd, query });
   return rows.map((row) => toRecord(row));
 }
+
+/** Search bar's global mode — any event in the workspace, any date, not just the visible range. */
+export async function searchEventsGlobal(
+  userId: string,
+  workspaceId: string,
+  query: string,
+  calendarIds: string[] | undefined,
+  limit?: number
+): Promise<EventRecord[]> {
+  await assertWorkspaceMember(userId, workspaceId);
+  const rows = await eventRepository.searchGlobal({ workspaceId, calendarIds, query, limit });
+  return rows.map((row) => toRecord(row));
+}

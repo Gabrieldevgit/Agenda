@@ -60,6 +60,36 @@ export const eventRepository = {
     });
   },
 
+  /**
+   * Global search (not range-limited) — powers the header search bar's
+   * "Events" results, so a match next month or last year is still found.
+   * Ordered by absolute distance from `now` so nearby events surface first.
+   */
+  async searchGlobal({ workspaceId, calendarIds, query, limit = 20 }: { workspaceId: string; calendarIds?: string[]; query: string; limit?: number }) {
+    const q = query.trim();
+    if (!q) return [];
+    const rows = await prisma.event.findMany({
+      where: {
+        deletedAt: null,
+        calendar: {
+          workspaceId,
+          ...(calendarIds && calendarIds.length > 0 ? { id: { in: calendarIds } } : calendarIds && calendarIds.length === 0 ? { id: { in: [] } } : {}),
+        },
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { location: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { startAt: "asc" },
+      take: 200, // cap the scan; re-sorted by recency-to-now below, then trimmed to `limit`
+    });
+    const now = Date.now();
+    return rows
+      .sort((a: { startAt: Date }, b: { startAt: Date }) => Math.abs(a.startAt.getTime() - now) - Math.abs(b.startAt.getTime() - now))
+      .slice(0, limit);
+  },
+
   async findById(id: string) {
     return prisma.event.findUnique({ where: { id }, include: { calendar: true } });
   },
