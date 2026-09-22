@@ -83,3 +83,30 @@ export async function assertCanManageMembers(userId: string, workspaceId: string
   }
   return m;
 }
+
+/**
+ * Notebook v3 §2.1: real auth → workspace resolver. Returns the user's default
+ * workspace (owner's first membership, or first membership) — never trusts client-supplied id.
+ */
+export async function resolveDefaultWorkspace(userId: string): Promise<{ workspaceId: string; role: MembershipRole } | null> {
+  const membership = await prisma.membership.findFirst({
+    where: { userId },
+    orderBy: [{ role: "asc" }], // owner < admin < member < viewer lexicographically, but we explicitly prefer owner
+    include: { workspace: true },
+  });
+  if (!membership) return null;
+  // Prefer owner membership if multiple.
+  const ownerMembership = await prisma.membership.findFirst({ where: { userId, role: "owner" } });
+  const chosen = ownerMembership ?? membership;
+  return { workspaceId: chosen.workspaceId, role: chosen.role as MembershipRole };
+}
+
+export async function getUserWorkspaceOrThrow(userId: string, requestedWorkspaceId?: string | null): Promise<string> {
+  if (requestedWorkspaceId) {
+    await assertWorkspaceMember(userId, requestedWorkspaceId);
+    return requestedWorkspaceId;
+  }
+  const resolved = await resolveDefaultWorkspace(userId);
+  if (!resolved) throw new Error("NOT_FOUND: no workspace for user — run onboarding");
+  return resolved.workspaceId;
+}

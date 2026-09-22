@@ -31,9 +31,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ calendars });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg.includes("DATABASE_URL") || msg.includes("prisma") || msg.includes("P1001")) {
-      console.error("GET /api/calendars Prisma fallback demo:", msg);
-      return NextResponse.json({ calendars: DEMO_CALENDARS.filter((c) => c.workspaceId === workspaceId) });
+    if (msg.includes("DATABASE_URL") || msg.includes("prisma") || msg.includes("P1001") || msg.includes("Supabase not configured")) {
+      console.error("GET /api/calendars infra error:", msg);
+      return NextResponse.json({ error: { code: "SERVER_ERROR", message: "Database unavailable." } }, { status: 500 });
     }
     const status = msg.startsWith("FORBIDDEN") ? 403 : msg.startsWith("NOT_FOUND") ? 404 : 400;
     return NextResponse.json({ error: { code: status === 403 ? "FORBIDDEN" : "BAD_REQUEST", message: msg } }, { status });

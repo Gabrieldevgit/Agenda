@@ -21,12 +21,13 @@ export interface EventSearchQuery extends EventRangeQuery {
 }
 
 export const eventRepository = {
+  // Notebook v3 §3.6: half-open [rangeStart, rangeEnd) — avoid boundary duplication
   async findInRange({ workspaceId, calendarIds, rangeStart, rangeEnd }: EventRangeQuery) {
     return prisma.event.findMany({
       where: {
         deletedAt: null,
-        startAt: { lte: rangeEnd },
-        endAt: { gte: rangeStart },
+        startAt: { lt: rangeEnd },
+        endAt: { gt: rangeStart },
         calendar: {
           workspaceId,
           ...(calendarIds && calendarIds.length > 0 ? { id: { in: calendarIds } } : calendarIds && calendarIds.length === 0 ? { id: { in: [] } } : {}),
@@ -43,8 +44,8 @@ export const eventRepository = {
     return prisma.event.findMany({
       where: {
         deletedAt: null,
-        startAt: { lte: rangeEnd },
-        endAt: { gte: rangeStart },
+        startAt: { lt: rangeEnd },
+        endAt: { gt: rangeStart },
         calendar: {
           workspaceId,
           ...(calendarIds && calendarIds.length > 0 ? { id: { in: calendarIds } } : calendarIds && calendarIds.length === 0 ? { id: { in: [] } } : {}),

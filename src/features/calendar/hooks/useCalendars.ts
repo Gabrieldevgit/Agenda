@@ -1,10 +1,11 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import type { CalendarSummary } from "../types";
+import { readApiError } from "@/lib/api/error";
 
 async function fetchCalendars(workspaceId: string): Promise<CalendarSummary[]> {
   const res = await fetch(`/api/calendars?workspaceId=${encodeURIComponent(workspaceId)}`);
-  if (!res.ok) throw new Error((await res.json()).error?.message ?? "Failed to load calendars");
+  if (!res.ok) await readApiError(res);
   const data = await res.json();
   return (data.calendars as any[]).map((c) => ({
     id: c.id,

@@ -37,6 +37,7 @@ export function MonthView({
     return { grid: cells, daysInMonth: daysInMonthVal };
   }, [anchor, timeZone]);
 
+  // Notebook v3 §3.2: month must show each touched day, not just start
   const byDay = useMemo(() => {
     const m = new Map<string, EventRecord[]>();
     for (const cell of grid) {
@@ -44,19 +45,15 @@ export function MonthView({
       m.set(k, []);
     }
     for (const e of events) {
-      const k = dayKey(e.startAt, timeZone);
-      if (m.has(k)) m.get(k)!.push(e);
-      // Also include multi-day span: show on each day it touches (simple).
-      // Segment is handled fully in TimeGrid; here we show chip on start day only plus spill handled below.
+      const startK = dayKey(e.startAt, timeZone);
+      const endK = dayKey(e.endAt, timeZone);
+      // Push to every grid day between startK and endK inclusive (handles multi-day)
+      for (const [k, arr] of m.entries()) {
+        if (k >= startK && k <= endK) arr.push(e);
+      }
     }
     return m;
   }, [grid, events, timeZone]);
-
-  const monthLabel = formatInTimeZone(
-    toZonedTime(new Date(toZonedTime(anchor, timeZone).getFullYear(), toZonedTime(anchor, timeZone).getMonth(), 1), timeZone),
-    timeZone,
-    "yyyy-MM"
-  );
 
   return (
     <div className="month-wrap" style={{ height: "100%", overflow: "auto", padding: 8 }}>

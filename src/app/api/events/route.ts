@@ -49,10 +49,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ events });
   } catch (err) {
     const msg = (err as Error).message;
-    // Prisma/DATABASE_URL missing -> fallback to empty instead of 500 for demo
-    if (msg.includes("DATABASE_URL") || msg.includes("Can't reach database") || msg.includes("P1001") || msg.includes("prisma")) {
-      console.error("GET /api/events Prisma error (returning demo empty):", msg);
-      return NextResponse.json({ events: [] });
+    // Notebook v3 §2.4: never hide DB outage as empty — return 500
+    if (msg.includes("DATABASE_URL") || msg.includes("Can't reach database") || msg.includes("P1001") || msg.includes("prisma") || msg.includes("Supabase not configured")) {
+      console.error("GET /api/events infra error:", msg);
+      return NextResponse.json({ error: { code: "SERVER_ERROR", message: "Database unavailable. Try again." } }, { status: 500 });
     }
     const status = msg.startsWith("FORBIDDEN") ? 403 : msg.startsWith("NOT_FOUND") ? 404 : msg.startsWith("CONFLICT") ? 409 : 400;
     return NextResponse.json({ error: { code: status === 403 ? "FORBIDDEN" : status === 404 ? "NOT_FOUND" : "BAD_REQUEST", message: msg } }, { status });
@@ -61,12 +61,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  // Demo: echo back without DB so Create button doesn't 500 when no env.
-  if (body?.calendarId && isDemoMode()) {
-    const workspaceFromBody = (body as any).workspaceId;
-    // Heuristic: if calendarId is demo fallback id (work/personal...) and no DB, mock success
+  // Explicit demo mode only (TEMPO_DEMO_MODE=true) — fail closed otherwise
+  if (isDemoMode() && body?.calendarId) {
     const demoCalIds = new Set(["work", "personal", "study", "health"]);
-    if (demoCalIds.has(body.calendarId) || workspaceFromBody === "demo-workspace") {
+    if (demoCalIds.has(body.calendarId)) {
       const now = new Date().toISOString();
       const mock = {
         id: `demo-${Date.now()}`,

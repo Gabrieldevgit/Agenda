@@ -12,6 +12,7 @@ import {
   assertCanWriteWorkspace,
 } from "./workspace-service";
 import { prisma } from "@/lib/prisma/client";
+import type { Prisma } from "@prisma/client";
 import { eventInputSchema, eventInputPartialSchema, moveOrResizeSchema, type EventInput } from "@/features/events/validation/event-schema";
 import type { EventRecord } from "@/features/calendar/types";
 
@@ -23,7 +24,10 @@ import type { EventRecord } from "@/features/calendar/types";
  * the repository — RLS is secondary defense only.
  */
 
-function toRecord(row: Awaited<ReturnType<typeof eventRepository.findById>>): EventRecord {
+type EventRow = Prisma.EventGetPayload<{}>;
+type EventWithCalendarRow = Prisma.EventGetPayload<{ include: { calendar: true } }>;
+
+function toRecord(row: EventRow | EventWithCalendarRow | null): EventRecord {
   if (!row) throw new Error("NOT_FOUND: event");
   return {
     id: row.id,
@@ -35,7 +39,7 @@ function toRecord(row: Awaited<ReturnType<typeof eventRepository.findById>>): Ev
     endAt: row.endAt.toISOString(),
     timezone: row.timezone,
     allDay: row.allDay,
-    status: row.status,
+    status: row.status as EventRecord["status"],
   };
 }
 
@@ -48,9 +52,7 @@ export async function listEventsInRange(
 ): Promise<EventRecord[]> {
   await assertWorkspaceMember(userId, workspaceId);
   const rows = await eventRepository.findInRange({ workspaceId, calendarIds, rangeStart, rangeEnd });
-  return rows.map((row: any) =>
-    toRecord({ ...row, calendar: { workspaceId } } as never)
-  );
+  return rows.map((row) => toRecord(row));
 }
 
 export async function createEvent(userId: string, rawInput: unknown): Promise<EventRecord> {
@@ -115,5 +117,5 @@ export async function searchEvents(
 ): Promise<EventRecord[]> {
   await assertWorkspaceMember(userId, workspaceId);
   const rows = await eventRepository.searchInRange({ workspaceId, calendarIds, rangeStart, rangeEnd, query });
-  return rows.map((row: any) => toRecord({ ...row, calendar: { workspaceId } } as never));
+  return rows.map((row) => toRecord(row));
 }

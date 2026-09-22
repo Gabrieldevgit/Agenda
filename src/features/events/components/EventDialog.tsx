@@ -13,7 +13,7 @@ function toTimeInput(iso: string, tz: string): string {
 }
 
 export function EventDialog({
-  open, draft, calendars, isNew, onClose, onSave, onDelete,
+  open, draft, calendars, isNew, onClose, onSave, onDelete, isSaving, externalError,
 }: {
   open: boolean;
   draft: EventDraft | null;
@@ -22,6 +22,8 @@ export function EventDialog({
   onClose: () => void;
   onSave: (draft: EventDraft) => void;
   onDelete: () => void;
+  isSaving?: boolean;
+  externalError?: string;
 }) {
   const [form, setForm] = useState<EventDraft | null>(draft);
   const [error, setError] = useState("");
@@ -29,6 +31,7 @@ export function EventDialog({
 
   useEffect(() => { setForm(draft); setError(""); }, [draft]);
   useEffect(() => { if (open) titleRef.current?.focus(); }, [open]);
+  useEffect(() => { if (externalError) setError(externalError); }, [externalError]);
 
   if (!open || !form) return null;
 
@@ -142,13 +145,13 @@ export function EventDialog({
 
         <div className="acts">
           {!isNew && (
-            <button className="btn danger" onClick={onDelete}>
+            <button className="btn danger" onClick={onDelete} disabled={!!isSaving}>
               <TrashIcon size={16} /> Delete event
             </button>
           )}
           <span style={{ flex: 1 }} />
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary" onClick={submit}>Save event</button>
+          <button className="btn ghost" onClick={onClose} disabled={!!isSaving}>Cancel</button>
+          <button className="btn primary" onClick={submit} disabled={!!isSaving}>{isSaving ? "Saving…" : "Save event"}</button>
         </div>
       </div>
     </div>

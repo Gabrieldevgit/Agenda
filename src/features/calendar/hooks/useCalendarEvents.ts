@@ -7,6 +7,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { EventDraft, EventRecord } from "../types";
+import { readApiError } from "@/lib/api/error";
 
 interface RangeArgs {
   workspaceId: string;
@@ -34,7 +35,7 @@ async function fetchEvents(args: RangeArgs): Promise<EventRecord[]> {
   if (args.calendarIds.length === 0) params.append("_emptyCalendars", "1");
   if (args.q) params.append("q", args.q);
   const res = await fetch(`/api/events?${params.toString()}`);
-  if (!res.ok) throw new Error((await res.json()).error ?? "Failed to load events");
+  if (!res.ok) await readApiError(res);
   return (await res.json()).events;
 }
 
@@ -49,7 +50,7 @@ export function useEventMutations(args: RangeArgs) {
   const create = useMutation({
     mutationFn: async (draft: EventDraft) => {
       const res = await fetch("/api/events", { method: "POST", body: JSON.stringify(draft) });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Could not create event");
+      if (!res.ok) await readApiError(res);
       return (await res.json()).event as EventRecord;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
@@ -58,7 +59,7 @@ export function useEventMutations(args: RangeArgs) {
   const update = useMutation({
     mutationFn: async ({ id, ...draft }: EventDraft & { id: string }) => {
       const res = await fetch(`/api/events/${id}`, { method: "PATCH", body: JSON.stringify(draft) });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Could not save event");
+      if (!res.ok) await readApiError(res);
       return (await res.json()).event as EventRecord;
     },
     // Optimistic: apply the edit immediately, roll back on failure.
@@ -79,7 +80,7 @@ export function useEventMutations(args: RangeArgs) {
   const moveOrResize = useMutation({
     mutationFn: async ({ id, startAt, endAt }: { id: string; startAt: string; endAt: string }) => {
       const res = await fetch(`/api/events/${id}`, { method: "PATCH", body: JSON.stringify({ startAt, endAt }) });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Could not move event");
+      if (!res.ok) await readApiError(res);
       return (await res.json()).event as EventRecord;
     },
     onMutate: async ({ id, startAt, endAt }) => {
@@ -99,7 +100,7 @@ export function useEventMutations(args: RangeArgs) {
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) throw new Error((await res.json()).error ?? "Could not delete event");
+      if (!res.ok && res.status !== 204) await readApiError(res);
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: key });
@@ -116,7 +117,7 @@ export function useEventMutations(args: RangeArgs) {
   const restore = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/events/${id}/restore`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Could not restore event");
+      if (!res.ok) await readApiError(res);
       return (await res.json()).event as EventRecord;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),

@@ -11,8 +11,11 @@ function anonKey() {
 }
 
 export async function middleware(request: NextRequest) {
-  // Demo mode: no Supabase configured -> bypass token refresh entirely.
-  // Previously this threw 500 on every /api/* when NEXT_PUBLIC_SUPABASE_URL was empty.
+  // If Supabase not configured and not in explicit demo mode, still try but fail open for unauth routes;
+  // in production missing config should have been caught at build. In demo mode bypass entirely.
+  if ((!process.env.NEXT_PUBLIC_SUPABASE_URL || !anonKey()) && process.env.TEMPO_DEMO_MODE === "true") {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !anonKey()) {
     return NextResponse.next({ request: { headers: request.headers } });
   }

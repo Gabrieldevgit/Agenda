@@ -15,20 +15,27 @@ function supabaseAnonKey(): string {
   return (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "") as string;
 }
 
-function isSupabaseConfigured(): boolean {
+export function isSupabaseConfigured(): boolean {
   return !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!supabaseAnonKey();
+}
+
+export function isDemoMode(): boolean {
+  // Notebook v3 §2.2: demo mode must be explicit via TEMPO_DEMO_MODE=true, never inferred
+  // from missing infra. Missing Supabase/DATABASE_URL in production must fail closed (500).
+  return process.env.TEMPO_DEMO_MODE === "true";
 }
 
 export async function createSupabaseServerClient() {
   if (!isSupabaseConfigured()) {
-    // Return a mock that behaves as unauthenticated — lets demo-workspace bypass auth (see API routes).
-    // Throwing here caused 500 on every /api/* when .env is empty.
-    return {
-      auth: {
-        getUser: async () => ({ data: { user: null }, error: null }),
-        getSession: async () => ({ data: { session: null }, error: null }),
-      },
-    } as unknown as Awaited<ReturnType<typeof createServerClient>>;
+    if (isDemoMode()) {
+      return {
+        auth: {
+          getUser: async () => ({ data: { user: null }, error: null }),
+          getSession: async () => ({ data: { session: null }, error: null }),
+        },
+      } as unknown as Awaited<ReturnType<typeof createServerClient>>;
+    }
+    throw new Error("Supabase not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   }
   const cookieStore = await cookies();
   return createServerClient(
@@ -45,9 +52,4 @@ export async function createSupabaseServerClient() {
       },
     }
   );
-}
-
-export function isDemoMode(): boolean {
-  // If either Supabase or Postgres is not configured, treat demo-workspace as local mock.
-  return !isSupabaseConfigured() || !process.env.DATABASE_URL;
 }

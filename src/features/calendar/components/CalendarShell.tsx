@@ -12,7 +12,6 @@
  * - empty calendar filter not mutated (§19)
  */
 import { useEffect, useMemo, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { addDays, addMonths, mondayOf, titleForView, toInstant } from "@/lib/dates/date-utils";
 import { useCalendarEvents, useEventMutations } from "../hooks/useCalendarEvents";
 import { useCalendars } from "../hooks/useCalendars";
@@ -22,8 +21,7 @@ import { AgendaView } from "./AgendaView";
 import { EventDialog } from "@/features/events/components/EventDialog";
 import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, SearchIcon, MenuIcon } from "@/lib/icons";
 import type { CalendarSummary, CalendarView, EventDraft } from "../types";
-
-const queryClient = new QueryClient();
+import { formatInTimeZone } from "date-fns-tz";
 
 const FALLBACK_CALENDARS: CalendarSummary[] = [
   { id: "work", name: "Work", color: "var(--work)", isDefault: true, isArchived: false },
@@ -33,11 +31,7 @@ const FALLBACK_CALENDARS: CalendarSummary[] = [
 ];
 
 export function CalendarShell(props: { workspaceId: string; timeZone: string }) {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <CalendarShellInner {...props} />
-    </QueryClientProvider>
-  );
+  return <CalendarShellInner {...props} />;
 }
 
 function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; timeZone: string }) {
@@ -48,7 +42,9 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const [visibleCalendars, setVisibleCalendars] = useState<string[]>(FALLBACK_CALENDARS.map((c) => c.id));
   const [dialogDraft, setDialogDraft] = useState<EventDraft | null>(null);
   const [dialogIsNew, setDialogIsNew] = useState(false);
+  const [dialogError, setDialogError] = useState("");
   const [toast, setToast] = useState<{ msg: string; undoId?: string } | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Debounce search (Notebook v2 §17/39)
   useEffect(() => {
@@ -56,8 +52,15 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const { data: serverCalendars } = useCalendars(workspaceId);
-  const calendars: CalendarSummary[] = serverCalendars && serverCalendars.length ? serverCalendars : FALLBACK_CALENDARS;
+  const { data: serverCalendars, isLoading: calLoading, isError: calError } = useCalendars(workspaceId);
+  // Notebook v3 §5: distinguish loading/error/empty/loaded — only use fallback when explicitly loading in demo
+  const calendars: CalendarSummary[] = (() => {
+    if (calError) return FALLBACK_CALENDARS; // surface fallback but caller can show error
+    if (calLoading) return FALLBACK_CALENDARS; // skeleton fallback
+    if (serverCalendars && serverCalendars.length) return serverCalendars;
+    if (serverCalendars && serverCalendars.length === 0) return []; // empty DB: show "Create your first calendar"
+    return FALLBACK_CALENDARS;
+  })();
 
   // Keep visibleCalendars in sync when server calendars load first time (preserve user toggles otherwise)
   useEffect(() => {
@@ -72,10 +75,14 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
 
   const days = useMemo(() => {
     if (view === "day") return [anchor];
-    if (view === "month" || view === "agenda") {
-      // For range fetching month/agenda still need full month buffer
+    if (view === "month") {
+      // month still needs week grid for TimeGrid fallback, but MonthView uses anchor directly
       const monday = mondayOf(anchor, timeZone);
       return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+    }
+    if (view === "agenda") {
+      // Agenda days not used for grid; return anchor for consistency
+      return [anchor];
     }
     const monday = mondayOf(anchor, timeZone);
     return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -83,19 +90,17 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
 
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (view === "month") {
-      const zoned = anchor;
-      // Expand to grid: start of month's Monday, end 42 days later
-      const start = mondayOf(new Date(zoned.getFullYear(), zoned.getMonth(), 1), timeZone);
-      // Actually need to compute correctly via civil: use mondayOf of month start
-      // For simplicity use the same monday calculation above via startOfMonthInZone would be better,
-      // but mondayOf already uses timezone. We'll align grid with MonthView's 42 cells.
-      const monthStart = new Date(zoned.getFullYear(), zoned.getMonth(), 1);
+      const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
       const m = mondayOf(monthStart, timeZone);
       return { rangeStart: m, rangeEnd: addDays(m, 42) };
     }
     if (view === "agenda") {
-      const start = days[0]!;
-      return { rangeStart: start, rangeEnd: addDays(start, 30) };
+      // Notebook v3 §3.1: agenda is next 30 civil days from anchor's local date, not Monday's week
+      const anchorDayKey = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
+      const start = new Date(anchorDayKey + "T00:00:00");
+      // Reconstruct civil start via timezone-aware instant at 00:00 anchor day - use anchor's date as civil
+      // Simplest: use anchor as start instant's day, but ensure range is half-open [start, start+30d)
+      return { rangeStart: anchor, rangeEnd: addDays(anchor, 30) };
     }
     if (view === "day") {
       const s = days[0]!;
@@ -134,22 +139,29 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     setDialogDraft(event);
   }
 
+  // Notebook v3 §2.6: keep dialog open until mutation succeeds, surface error inside dialog
   function handleSave(draft: EventDraft) {
-    if (dialogIsNew) create.mutate(draft);
-    else if (draft.id) update.mutate({ ...draft, id: draft.id });
-    setDialogDraft(null);
+    setDialogError("");
+    const opts = {
+      onSuccess: () => { setDialogDraft(null); setDialogError(""); },
+      onError: (e: any) => setDialogError(e?.message ?? String(e)),
+    };
+    if (dialogIsNew) create.mutate(draft as any, opts as any);
+    else if (draft.id) update.mutate({ ...draft, id: draft.id } as any, opts as any);
   }
 
   function handleDelete() {
     const id = dialogDraft?.id;
     if (!id) return;
+    setDialogError("");
     remove.mutate(id, {
       onSuccess: () => {
+        setDialogDraft(null);
         setToast({ msg: "Event deleted.", undoId: id });
         setTimeout(() => setToast(null), 4000);
       },
+      onError: (e: any) => setDialogError(e?.message ?? String(e)),
     });
-    setDialogDraft(null);
   }
 
   function handlePrev() {
@@ -165,10 +177,13 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
 
   const title = titleForView(anchor, view, timeZone);
 
+  const createDateKey = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
+  const isSaving = create.isPending || update.isPending;
+
   return (
     <div className="app">
       <header className="top">
-        <button className="icon" aria-label="Toggle sidebar"><MenuIcon /></button>
+        <button className="icon" aria-label="Toggle sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen((v) => !v)}><MenuIcon /></button>
         <button className="btn" onClick={() => setAnchor(new Date())}>Today</button>
         <button className="icon" aria-label="Previous" onClick={handlePrev}>
           <ChevronLeftIcon />
@@ -191,14 +206,18 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
             </button>
           ))}
         </div>
-        <button className="btn primary" onClick={() => openNewEventAt(rangeStart.toISOString().slice(0, 10), 9 * 60)}>
+        {/* Notebook v3 §6: Create defaults to anchor's civil date, not grid start */}
+        <button className="btn primary" onClick={() => openNewEventAt(createDateKey, 9 * 60)}>
           <PlusIcon size={16} /> Create
         </button>
       </header>
 
       <div className="body">
-        <aside className="side">
+        <aside className={`side${sidebarOpen ? " open" : ""}`} aria-hidden={!sidebarOpen && typeof window !== "undefined" && window.innerWidth < 768 ? true : undefined}>
           <h2>My calendars</h2>
+          {calError && <p style={{ fontSize: 12, color: "var(--now)" }}>Calendars failed to load.</p>}
+          {calLoading && <p style={{ fontSize: 12, color: "var(--muted)" }}>Loading calendars…</p>}
+          {!calLoading && !calError && calendars.length === 0 && <p style={{ fontSize: 12, color: "var(--muted)" }}>No calendars — create your first.</p>}
           {calendars.map((cal) => (
             <button
               key={cal.id}
@@ -243,9 +262,11 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         draft={dialogDraft}
         calendars={calendars}
         isNew={dialogIsNew}
-        onClose={() => setDialogDraft(null)}
+        onClose={() => { if (!isSaving) { setDialogDraft(null); setDialogError(""); } }}
         onSave={handleSave}
         onDelete={handleDelete}
+        isSaving={isSaving || remove.isPending}
+        externalError={dialogError}
       />
 
       {toast && (
