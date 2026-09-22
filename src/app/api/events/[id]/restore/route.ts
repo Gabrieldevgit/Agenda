@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, isDemoMode } from "@/lib/supabase/server";
 import { restoreEvent } from "@/server/services/event-service";
+import { restoreDemoStore } from "@/lib/demo/events";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (isDemoMode() && String(id).startsWith("demo-")) {
+    const restored = restoreDemoStore(id);
+    if (restored) return NextResponse.json({ event: restored });
     return NextResponse.json({ event: { id, title: "Restored", calendarId: "work", startAt: new Date().toISOString(), endAt: new Date().toISOString(), timezone: "UTC", allDay: false, status: "confirmed" } });
   }
   let user: any = null;

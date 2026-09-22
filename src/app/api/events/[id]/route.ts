@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, isDemoMode } from "@/lib/supabase/server";
 import { deleteEvent, moveOrResizeEvent, updateEvent } from "@/server/services/event-service";
+import { updateDemoStore, removeFromDemoStore } from "@/lib/demo/events";
 
 async function requireUser() {
   try {
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     body = await req.json();
     if (isDemoMode() && String(id).startsWith("demo-")) {
-      // Echo mock in demo
+      updateDemoStore(id, body);
       return NextResponse.json({ event: { id, ...body, title: body.title ?? "Demo" } });
     }
     // A bare {startAt, endAt} payload is a drag/resize; anything else is a full edit.
@@ -46,7 +47,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: { code: "UNAUTHENTICATED", message: "Sign in required." } }, { status: 401 });
   const { id } = await params;
-  if (isDemoMode() && String(id).startsWith("demo-")) return new NextResponse(null, { status: 204 });
+  if (isDemoMode() && String(id).startsWith("demo-")) {
+    removeFromDemoStore(id);
+    return new NextResponse(null, { status: 204 });
+  }
   try {
     await deleteEvent(user.id, id);
     return new NextResponse(null, { status: 204 });

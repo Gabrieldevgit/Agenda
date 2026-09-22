@@ -193,40 +193,40 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     return () => window.removeEventListener("keydown", onKey);
   }, [dialogDraft, sidebarOpen, createDateKey, view]);
 
-  // For mini dots: every touched civil day of visible events (filtered by calendars already via query)
+  // For mini dots: every touched civil day (prototype dot per day)
   const eventsByDate = useMemo(() => {
     const s = new Set<string>();
     for (const e of events) {
       const sk = dayKey(e.startAt, timeZone);
       const ek = dayKey(e.endAt, timeZone);
-      // If multi-day, add all days between
-      if (sk === ek) s.add(sk);
-      else {
-        // crude: add start and end and intermediate via day increment (use civil loop)
-        s.add(sk); s.add(ek);
-        // For prototype mini, only start day dot matters, but we add both for completeness
+      s.add(sk);
+      if (sk !== ek) {
+        // Walk intermediate civil days (handles multi-day)
+        let cur = sk;
+        for (let i = 0; i < 30; i++) {
+          if (cur >= ek) break;
+          // increment civil day by 1 (use string arithmetic via Date)
+          const d = new Date(cur + "T12:00:00");
+          d.setDate(d.getDate() + 1);
+          cur = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          if (cur <= ek) s.add(cur);
+          else break;
+        }
       }
     }
     return s;
   }, [events, timeZone]);
 
   const selectedRange: [string, string] = useMemo(() => {
-    if (view === "day") {
-      const k = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
-      return [k, k];
-    }
     if (view === "week") {
       const m = mondayOf(anchor, timeZone);
       const ms = formatInTimeZone(m, timeZone, "yyyy-MM-dd");
       const es = formatInTimeZone(addDays(m, 6, timeZone), timeZone, "yyyy-MM-dd");
       return [ms, es];
     }
-    if (view === "agenda") {
-      const s = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
-      const e = formatInTimeZone(addDays(anchor, 29, timeZone), timeZone, "yyyy-MM-dd");
-      return [s, e];
-    }
-    return ["", ""];
+    // Prototype parity: day/month/agenda highlight only anchor day (month/agenda not week range)
+    const k = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
+    return [k, k];
   }, [view, anchor, timeZone]);
 
   return (

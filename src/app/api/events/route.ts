@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, isDemoMode } from "@/lib/supabase/server";
 import { createEvent, listEventsInRange } from "@/server/services/event-service";
-
-const DEMO_EVENTS: never[] = [];
+import { getDemoStore, addToDemoStore } from "@/lib/demo/events";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -16,10 +15,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: { code: "BAD_REQUEST", message: "workspaceId, rangeStart and rangeEnd are required" } }, { status: 400 });
   }
 
-  // Demo fallback: app ships with demo-workspace but no .env -> don't 500, return empty.
+  // Demo fallback: prototype-accurate seed so week view matches tempo-agenda.html
   if (workspaceId === "demo-workspace" && isDemoMode()) {
-    // Cheap server-side search for demo (q filtering) so UI search still works.
-    let evts: any[] = DEMO_EVENTS;
+    let evts: any[] = getDemoStore();
+    const rs = new Date(rangeStart);
+    const re = new Date(rangeEnd);
+    // Half-open filtering like repository: startAt < re && endAt > rs (or allDay day in range)
+    evts = evts.filter((e: any) => {
+      if (e.allDay) {
+        // All-day: include if its civil day is within [rs, re)
+        const ek = e.startAt.slice(0, 10);
+        const rsk = rs.toISOString().slice(0, 10);
+        const rek = re.toISOString().slice(0, 10);
+        return ek >= rsk && ek < rek;
+      }
+      const s = new Date(e.startAt).getTime();
+      const en = new Date(e.endAt).getTime();
+      return s < re.getTime() && en > rs.getTime();
+    });
     if (q) {
       const lc = q.toLowerCase();
       evts = evts.filter((e: any) => `${e.title} ${e.description} ${e.location}`.toLowerCase().includes(lc));
@@ -66,7 +79,7 @@ export async function POST(req: NextRequest) {
     const demoCalIds = new Set(["work", "personal", "study", "health"]);
     if (demoCalIds.has(body.calendarId)) {
       const now = new Date().toISOString();
-      const mock = {
+      const mock: any = {
         id: `demo-${Date.now()}`,
         calendarId: body.calendarId,
         title: body.title ?? "(No title)",
@@ -78,6 +91,7 @@ export async function POST(req: NextRequest) {
         allDay: !!body.allDay,
         status: "confirmed" as const,
       };
+      addToDemoStore(mock);
       return NextResponse.json({ event: mock }, { status: 201 });
     }
   }

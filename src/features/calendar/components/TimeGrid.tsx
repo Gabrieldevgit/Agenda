@@ -12,6 +12,12 @@ import type { CalendarSummary, EventRecord } from "../types";
 import { useEventDrag } from "../hooks/useEventDrag";
 
 const HOUR = 56;
+function fmt(m: number): string {
+  const h = Math.floor(m / 60) % 24;
+  const mi = m % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (h % 12 || 12) + (mi ? ":" + pad(mi) : "") + " " + (h < 12 ? "AM" : "PM");
+}
 
 export function TimeGrid({
   days, events, calendars, timeZone, onSelectEvent, onCreateAt, onMoveOrResize, onSelectDay,
@@ -108,16 +114,18 @@ export function TimeGrid({
                   const orig = seg.event;
                   const start = seg.startMinutes;
                   const end = seg.endMinutes;
+                  const h = Math.max(22, ((end - start) * HOUR) / 60 - 2);
+                  const range = `${fmt(start)} – ${fmt(end)}`;
                   return (
                     <div
                       key={orig.id + (seg.continuesBefore ? "-b" : "") + (seg.continuesAfter ? "-a" : "")}
                       className="ev"
                       role="button"
                       tabIndex={0}
-                      aria-label={`${orig.title} ${formatClock(orig.startAt, timeZone)}${seg.continuesBefore ? " (continues)" : ""}`}
+                      aria-label={`${orig.title} ${range}${seg.continuesBefore ? " (continues)" : ""}`}
                       style={{
                         top: (start * HOUR) / 60,
-                        height: Math.max(22, ((end - start) * HOUR) / 60 - 2),
+                        height: h,
                         left: `calc(${(column / columnCount) * 100}% + 2px)`,
                         width: `calc(${100 / columnCount}% - 4px)`,
                         ["--c" as string]: colorOf(orig.calendarId),
@@ -125,8 +133,10 @@ export function TimeGrid({
                       }}
                       onPointerDown={(e) => onPointerDown(e, orig, "move")}
                       onClick={(e) => { e.stopPropagation(); onSelectEvent(orig.id); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSelectEvent(orig.id); } }}
                     >
                       <div className="t">{orig.title}{seg.continuesAfter ? " →" : ""}</div>
+                      {h >= 40 && <div className="s">{range}{orig.location && h >= 58 ? ` · ${orig.location}` : ""}</div>}
                       <div className="rz" onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, orig, "resize"); }} />
                     </div>
                   );
