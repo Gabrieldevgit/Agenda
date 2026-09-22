@@ -14,7 +14,8 @@ import { AgendaView } from "./AgendaView";
 import { MiniCalendar } from "./MiniCalendar";
 import { UpNext } from "./UpNext";
 import { EventDialog } from "@/features/events/components/EventDialog";
-import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, SearchIcon, MenuIcon } from "@/lib/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, SearchIcon, MenuIcon, SettingsIcon } from "@/lib/icons";
+import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import type { CalendarSummary, CalendarView, EventDraft } from "../types";
 import { dayKey } from "@/lib/dates/date-utils";
 import { formatInTimeZone } from "date-fns-tz";
@@ -42,6 +43,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const [dialogError, setDialogError] = useState("");
   const [toast, setToast] = useState<{ msg: string; undoId?: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Debounce search (Notebook v2 §17/39)
@@ -252,6 +254,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
             </button>
           ))}
         </div>
+        <button className="icon" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)}><SettingsIcon /></button>
         <button className="btn primary" onClick={() => openNewEventAt(createDateKey, 9 * 60)}><PlusIcon size={16} /> Create</button>
       </header>
 
@@ -289,6 +292,11 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
                 <span className="cb" />{cal.name}
               </button>
             ))}
+          </div>
+          <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+            <button className="calrow" onClick={() => setSettingsOpen(true)} style={{ ["--c" as string]: "var(--muted)" } as any}>
+              <span className="cb" style={{ display: "grid", placeItems: "center", borderColor: "var(--muted)" }}><SettingsIcon size={12} /></span> Settings
+            </button>
           </div>
         </aside>
         <div className={`backdrop${sidebarOpen ? " open" : ""}`} id="backdrop" onClick={() => setSidebarOpen(false)} />
@@ -339,6 +347,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         isSaving={isSaving || remove.isPending}
         externalError={dialogError}
       />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {toast && (
         <div role="status" aria-live="polite" className="toast">

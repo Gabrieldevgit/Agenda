@@ -59,6 +59,15 @@ export const TrashIcon = (p: IconProps) => (
 export const CloseIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="m6 6 12 12M18 6 6 18" /></svg>
 );
+export const SettingsIcon = (p: IconProps) => (
+  <svg {...base(p)}><circle cx={12} cy={12} r={3} /><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M17.66 6.34l2.12-2.12" /></svg>
+);
+export const SunIcon = (p: IconProps) => (
+  <svg {...base(p)}><circle cx={12} cy={12} r={4} /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>
+);
+export const MoonIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+);
 export const CalendarMarkIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="3.5" y="5" width="17" height="15" rx="3" />
