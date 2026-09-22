@@ -14,7 +14,7 @@ import { useEventDrag } from "../hooks/useEventDrag";
 const HOUR = 56;
 
 export function TimeGrid({
-  days, events, calendars, timeZone, onSelectEvent, onCreateAt, onMoveOrResize,
+  days, events, calendars, timeZone, onSelectEvent, onCreateAt, onMoveOrResize, onSelectDay,
 }: {
   days: Date[];
   events: EventRecord[];
@@ -23,12 +23,22 @@ export function TimeGrid({
   onSelectEvent: (id: string) => void;
   onCreateAt: (dateKey: string, minutes: number) => void;
   onMoveOrResize: (id: string, startAt: string, endAt: string) => void;
+  onSelectDay?: (iso: string) => void;
 }) {
   const colorOf = (calendarId: string) =>
     calendars.find((c) => c.id === calendarId)?.color ?? "var(--accent)";
 
   // Notebook v3 §3.5: segment events per visible civil day, then layout clamped copies
   const segMap = useMemo(() => segmentEventsForDays(events, days, timeZone), [events, days, timeZone]);
+  const allDayMap = useMemo(() => {
+    const m = new Map<string, EventRecord[]>();
+    for (const d of days) m.set(dayKey(d.toISOString(), timeZone), []);
+    for (const e of events) if (e.allDay) {
+      const k = dayKey(e.startAt, timeZone);
+      if (m.has(k)) m.get(k)!.push(e);
+    }
+    return m;
+  }, [events, days, timeZone]);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const { onPointerDown } = useEventDrag({ timeZone, hourHeight: HOUR, days, onMoveOrResize, gridRef: gridRef as any });
@@ -37,16 +47,32 @@ export function TimeGrid({
   const nowMinutes = minutesOfDay(new Date().toISOString(), timeZone);
 
   return (
-    <div className="tg-wrap">
+    <div className="tg-wrap" id="scroll">
       <div className="tg-inner" style={{ ["--n" as string]: days.length }}>
         <div className="tg-head">
           <div />
           {days.map((d) => {
             const key = dayKey(d.toISOString(), timeZone);
             return (
-              <div key={key} className={`dh${key === today ? " today" : ""}`}>
+              <button key={key} className={`dh${key === today ? " today" : ""}`} onClick={() => onSelectDay?.(key)} data-goto={key}>
                 <span>{d.toLocaleDateString("en-US", { weekday: "short" })}</span>
                 <span className="dd">{d.getDate()}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="tg-all">
+          <div className="lbl">All day</div>
+          {days.map((d) => {
+            const key = dayKey(d.toISOString(), timeZone);
+            const list = allDayMap.get(key) ?? [];
+            return (
+              <div key={key} className="ac">
+                {list.map((ev) => (
+                  <button key={ev.id} className="chip" data-id={ev.id} style={{ ["--c" as string]: colorOf(ev.calendarId) } as any} onClick={() => onSelectEvent(ev.id)}>
+                    {ev.title}
+                  </button>
+                ))}
               </div>
             );
           })}

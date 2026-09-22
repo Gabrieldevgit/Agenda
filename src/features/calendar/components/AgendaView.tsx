@@ -9,11 +9,13 @@ export function AgendaView({
   calendars,
   timeZone,
   onSelectEvent,
+  anchor,
 }: {
   events: EventRecord[];
   calendars: CalendarSummary[];
   timeZone: string;
   onSelectEvent: (id: string) => void;
+  anchor?: Date;
 }) {
   const colorOf = (id: string) => calendars.find((c) => c.id === id)?.color ?? "var(--accent)";
 
@@ -28,39 +30,51 @@ export function AgendaView({
     return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [events, timeZone]);
 
-  if (grouped.length === 0) return <p style={{ padding: 16, color: "var(--muted)" }}>No events in this range.</p>;
+  if (grouped.length === 0)
+    return (
+      <div className="agenda">
+        <div className="empty">
+          <b>Nothing planned</b>Press C or tap Create to add an event.
+        </div>
+      </div>
+    );
 
   return (
-    <div style={{ height: "100%", overflow: "auto", padding: 12 }}>
-      {grouped.map(([day, list]) => (
-        <div key={day} style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)", marginBottom: 6 }}>
-            {formatInTimeZone(new Date(day + "T12:00:00"), timeZone, "EEEE, MMMM d, yyyy")}
+    <div className="agenda">
+      {grouped.map(([day, list]) => {
+        const d = new Date(day + "T12:00:00");
+        const isToday = day === formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd");
+        return (
+          <div key={day} className={`day${isToday ? " today" : ""}`}>
+            <div>
+              <div className="dnum">{d.getDate()}</div>
+              <div className="dwk">
+                {formatInTimeZone(d, timeZone, "EEE")}, {formatInTimeZone(d, timeZone, "MMM")}
+              </div>
+            </div>
+            <div>
+              {list.map((ev) => (
+                <button key={ev.id} className="arow" data-id={ev.id} style={{ ["--c" as string]: colorOf(ev.calendarId) } as any} onClick={() => onSelectEvent(ev.id)}>
+                  <span className="sw" />
+                  <span className="tm">{ev.allDay ? "All day" : formatRange(ev.startAt, ev.endAt, timeZone)}</span>
+                  <span>
+                    <span className="ti">{ev.title}</span>
+                    {ev.location && (
+                      <span className="lo">
+                        <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                          <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" />
+                          <circle cx={12} cy={11} r={2} />
+                        </svg>
+                        {ev.location}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {list.map((ev) => (
-              <button
-                key={ev.id}
-                onClick={() => onSelectEvent(ev.id)}
-                style={{
-                  textAlign: "left",
-                  border: "1px solid var(--line)",
-                  background: "var(--surface)",
-                  borderRadius: 12,
-                  padding: "10px 12px",
-                  borderLeft: `4px solid ${colorOf(ev.calendarId)}`,
-                  borderLeftColor: colorOf(ev.calendarId) as string,
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>{ev.title}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                  {ev.allDay ? "All day" : formatRange(ev.startAt, ev.endAt, timeZone)} {ev.location ? `· ${ev.location}` : ""}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

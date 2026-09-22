@@ -55,35 +55,59 @@ export function MonthView({
     return m;
   }, [grid, events, timeZone]);
 
+  const todayKey = formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd");
   return (
-    <div className="month-wrap" style={{ height: "100%", overflow: "auto", padding: 8 }}>
-      <div className="month-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 1, background: "var(--line)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
+    <div className="month">
+      <div className="mrow">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-          <div key={d} style={{ background: "var(--surface)", padding: "8px 6px", textAlign: "center", fontWeight: 600, fontSize: 12, color: "var(--muted)" }}>{d}</div>
+          <div key={d} className="mh">
+            {d}
+          </div>
         ))}
-        {grid.map((d) => {
-          const key = formatInTimeZone(d, timeZone, "yyyy-MM-dd");
-          const isCurrentMonth = d.getMonth() === toZonedTime(anchor, timeZone).getMonth();
-          const list = byDay.get(key) ?? [];
-          return (
-            <div
-              key={key}
-              onClick={() => onCreateAt(key, 9 * 60)}
-              style={{ background: "var(--surface)", minHeight: 92, padding: 6, cursor: "cell", opacity: isCurrentMonth ? 1 : 0.52 }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 12, color: isCurrentMonth ? "var(--ink)" : "var(--muted)" }}>{d.getDate()}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+      </div>
+      {Array.from({ length: 6 }, (_, r) => (
+        <div key={r} className="mrow">
+          {Array.from({ length: 7 }, (_, c) => {
+            const idx = r * 7 + c;
+            const d = grid[idx]!;
+            const key = formatInTimeZone(d, timeZone, "yyyy-MM-dd");
+            const list = byDay.get(key) ?? [];
+            const isOut = d.getMonth() !== anchor.getMonth();
+            const isToday = key === todayKey;
+            return (
+              <div
+                key={key}
+                className={`mcell${isOut ? " out" : ""}${isToday ? " today" : ""}`}
+                data-date={key}
+                onClick={() => onCreateAt(key, 9 * 60)}
+              >
+                <span className="num">{d.getDate()}</span>
                 {list.slice(0, 3).map((ev) => (
-                  <button key={ev.id} onClick={(e) => { e.stopPropagation(); onSelectEvent(ev.id); }} className="chip" style={{ ["--c" as string]: colorOf(ev.calendarId), fontSize: 11 } as any}>
-                    {!ev.allDay && <b>{formatClock(ev.startAt, timeZone)} </b>}{ev.title}
+                  <button
+                    key={ev.id}
+                    onClick={(e) => { e.stopPropagation(); onSelectEvent(ev.id); }}
+                    className="chip"
+                    style={{ ["--c" as string]: colorOf(ev.calendarId) } as any}
+                  >
+                    {!ev.allDay && <b>{formatClock(ev.startAt, timeZone)} </b>}
+                    {ev.title}
                   </button>
                 ))}
-                {list.length > 3 && <span style={{ fontSize: 11, color: "var(--muted)" }}>+{list.length - 3} more</span>}
+                {list.length > 3 && (
+                  <button className="more" onClick={(e) => { e.stopPropagation(); onSelectEvent(list[3]!.id); }}>
+                    +{list.length - 3} more
+                  </button>
+                )}
+                <div className="dots">
+                  {list.slice(0, 5).map((ev) => (
+                    <i key={ev.id} style={{ ["--c" as string]: colorOf(ev.calendarId) } as any} />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
