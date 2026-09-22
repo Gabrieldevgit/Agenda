@@ -50,8 +50,8 @@ export function MiniCalendar({
         </span>
       </div>
       <div className="mgrid">
-        {["M", "T", "W", "T", "F", "S", "S"].map((l) => (
-          <div key={l} className="wd">
+        {["M", "T", "W", "T", "F", "S", "S"].map((l, i) => (
+          <div key={`${l}-${i}`} className="wd">
             {l}
           </div>
         ))}
