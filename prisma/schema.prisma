@@ -36,8 +36,8 @@ model UserProfile {
   avatarUrl       String?  @map("avatar_url")
   locale          String   @default("en-US")
   defaultTimezone String   @default("UTC") @map("default_timezone")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   ownedWorkspaces Workspace[]  @relation("WorkspaceOwner")
   memberships     Membership[]
@@ -55,13 +55,14 @@ model Workspace {
   slug      String   @unique
   ownerId   String   @map("owner_id")
   owner     UserProfile @relation("WorkspaceOwner", fields: [ownerId], references: [id])
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships Membership[]
   calendars   Calendar[]
   auditLogs   AuditLog[]
 
+  @@index([ownerId])
   @@map("workspaces")
 }
 
@@ -70,7 +71,7 @@ model Membership {
   workspaceId String         @map("workspace_id")
   userId      String         @map("user_id")
   role        MembershipRole @default(member)
-  createdAt   DateTime       @default(now()) @map("created_at")
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
   workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -87,8 +88,8 @@ model Calendar {
   color       String   // token name, e.g. "work" | "personal" | hex
   isDefault   Boolean  @default(false) @map("is_default")
   isArchived  Boolean  @default(false) @map("is_archived")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events    Event[]
@@ -104,14 +105,14 @@ model Event {
   title            String
   description      String?
   location         String?
-  startAt          DateTime    @map("start_at") // timestamptz — actual instant
-  endAt            DateTime    @map("end_at")
+  startAt          DateTime    @map("start_at") @db.Timestamptz(3) // instant + timezone (P6 fix)
+  endAt            DateTime    @map("end_at") @db.Timestamptz(3)
   timezone         String      // IANA zone the event was authored in, e.g. "America/Toronto"
   allDay           Boolean     @default(false) @map("all_day")
   status           EventStatus @default(confirmed)
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
-  deletedAt        DateTime?   @map("deleted_at") // soft delete, powers Undo
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz(3) // soft delete, powers Undo
 
   calendar        Calendar         @relation(fields: [calendarId], references: [id], onDelete: Cascade)
   createdBy       UserProfile      @relation("EventCreator", fields: [createdById], references: [id])
@@ -121,6 +122,7 @@ model Event {
 
   @@index([calendarId, startAt, endAt])
   @@index([startAt])
+  @@index([createdById])
   @@map("events")
 }
 
@@ -129,10 +131,10 @@ model RecurrenceRule {
   eventId   String   @unique @map("event_id")
   rrule     String   // RFC 5545 RRULE string
   timezone  String
-  dtstart   DateTime
-  until     DateTime?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  dtstart   DateTime @db.Timestamptz(3)
+  until     DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
@@ -147,13 +149,14 @@ model Attendee {
   displayName    String?  @map("display_name")
   responseStatus String   @default("needs_action") @map("response_status")
   isOptional     Boolean  @default(false) @map("is_optional")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   event Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  UserProfile? @relation(fields: [userId], references: [id])
 
   @@unique([eventId, email])
+  @@index([userId])
   @@map("attendees")
 }
 
@@ -163,11 +166,13 @@ model Reminder {
   userId        String          @map("user_id")
   minutesBefore Int             @map("minutes_before")
   channel       ReminderChannel @default(in_app)
-  createdAt     DateTime        @default(now()) @map("created_at")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   event Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  UserProfile @relation(fields: [userId], references: [id])
 
+  @@index([eventId])
+  @@index([userId])
   @@map("reminders")
 }
 
@@ -179,11 +184,12 @@ model AuditLog {
   entityId    String   @map("entity_id")
   action      String
   metadata    Json?    @map("metadata_json")
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   actor     UserProfile @relation(fields: [actorUserId], references: [id])
 
   @@index([workspaceId, createdAt])
+  @@index([actorUserId])
   @@map("audit_logs")
 }
