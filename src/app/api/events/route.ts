@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, isDemoMode } from "@/lib/supabase/server";
 import { createEvent, listEventsInRange } from "@/server/services/event-service";
-import { getDemoStore, addToDemoStore } from "@/lib/demo/events";
+import { getDemoStore, addToDemoStore, type DemoEvent } from "@/lib/demo/events";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -17,11 +17,11 @@ export async function GET(req: NextRequest) {
 
   // Demo fallback: prototype-accurate seed so week view matches tempo-agenda.html
   if (workspaceId === "demo-workspace" && isDemoMode()) {
-    let evts: any[] = getDemoStore();
+    let evts: DemoEvent[] = getDemoStore();
     const rs = new Date(rangeStart);
     const re = new Date(rangeEnd);
     // Half-open filtering like repository: startAt < re && endAt > rs (or allDay day in range)
-    evts = evts.filter((e: any) => {
+    evts = evts.filter((e) => {
       if (e.allDay) {
         // All-day: include if its civil day is within [rs, re)
         const ek = e.startAt.slice(0, 10);
@@ -35,18 +35,18 @@ export async function GET(req: NextRequest) {
     });
     if (q) {
       const lc = q.toLowerCase();
-      evts = evts.filter((e: any) => `${e.title} ${e.description} ${e.location}`.toLowerCase().includes(lc));
+      evts = evts.filter((e) => `${e.title} ${e.description} ${e.location}`.toLowerCase().includes(lc));
     }
     if (emptySentinel) return NextResponse.json({ events: [] });
-    if (calendarIds.length) evts = evts.filter((e: any) => calendarIds.includes(e.calendarId));
+    if (calendarIds.length) evts = evts.filter((e) => calendarIds.includes(e.calendarId));
     return NextResponse.json({ events: evts });
   }
 
-  let user: any = null;
+  let user: { id: string } | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const res = await supabase.auth.getUser();
-    user = res.data?.user;
+    user = (res.data?.user as { id: string } | null) ?? null;
   } catch {
     // isDemoMode already handled above; any other Supabase misconfig -> 500 with friendly message
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: "Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and keys." } }, { status: 500 });
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     const demoCalIds = new Set(["work", "personal", "study", "health"]);
     if (demoCalIds.has(body.calendarId)) {
       const now = new Date().toISOString();
-      const mock: any = {
+      const mock: DemoEvent = {
         id: `demo-${Date.now()}`,
         calendarId: body.calendarId,
         title: body.title ?? "(No title)",
@@ -89,18 +89,18 @@ export async function POST(req: NextRequest) {
         endAt: body.endAt ?? now,
         timezone: body.timezone ?? "UTC",
         allDay: !!body.allDay,
-        status: "confirmed" as const,
+        status: "confirmed",
       };
       addToDemoStore(mock);
       return NextResponse.json({ event: mock }, { status: 201 });
     }
   }
 
-  let user: any = null;
+  let user: { id: string } | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const res = await supabase.auth.getUser();
-    user = res.data?.user;
+    user = (res.data?.user as { id: string } | null) ?? null;
   } catch (e) {
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: (e as Error).message } }, { status: 500 });
   }

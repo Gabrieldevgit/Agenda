@@ -20,9 +20,9 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export function isDemoMode(): boolean {
-  // Notebook v3 §2.2: demo mode must be explicit via TEMPO_DEMO_MODE=true, never inferred
-  // from missing infra. Missing Supabase/DATABASE_URL in production must fail closed (500).
-  return process.env.TEMPO_DEMO_MODE === "true";
+  // Notebook v3 §2.2 + P0 §3: demo mode must be explicit AND impossible in production.
+  // TEMPO_DEMO_MODE=true alone is not enough — production must always fail closed.
+  return process.env.TEMPO_DEMO_MODE === "true" && process.env.NODE_ENV !== "production";
 }
 
 export async function createSupabaseServerClient() {

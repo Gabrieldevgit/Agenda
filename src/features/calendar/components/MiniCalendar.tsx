@@ -32,7 +32,8 @@ export function MiniCalendar({
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       const iso = formatInTimeZone(d, timeZone, "yyyy-MM-dd");
-      arr.push({ date: d, iso, isOut: d.getMonth() !== anchor.getMonth() });
+      const isOut = formatInTimeZone(d, timeZone, "MM") !== formatInTimeZone(anchor, timeZone, "MM");
+      arr.push({ date: d, iso, isOut });
     }
     return { monthLabel: label, cells: arr, todayKey: today };
   }, [anchor, timeZone]);
@@ -63,7 +64,7 @@ export function MiniCalendar({
           const cls = `md${isOut ? " out" : ""}${isToday ? " today" : ""}${inRange ? " in" : ""}${isSelected ? " sel" : ""}`;
           return (
             <button key={iso} className={cls} onClick={() => onSelect(iso)} aria-label={date.toDateString()}>
-              {date.getDate()}
+              {formatInTimeZone(date, timeZone, "d")}
               {has && <i />}
             </button>
           );

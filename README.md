@@ -1,77 +1,45 @@
 # Tempo
 
-Production scaffold built from `tempo-construction-notebook.md`, on top of the
-original single-file prototype (kept in this chat's earlier turn as
-`tempo-agenda.html` — the UX baseline this repo ports from).
+Production calendar built from `tempo-construction-notebook` + `tempo-agenda.html` prototype.
 
-## What's actually implemented here
+**Stack:** Next.js 15 + TypeScript + Supabase Auth/Postgres + Prisma (server-only) + TanStack Query + Zod.
 
-This is **Phase 1 (refactor without changing UX) plus the Phase 3/4 groundwork**
-from the notebook's migration plan (§28) — not a finished, deployed SaaS app.
-Concretely:
+## What's implemented
 
-- `prisma/schema.prisma` — the full §7 model (UserProfile, Workspace,
-  Membership, Calendar, Event, RecurrenceRule, Attendee, Reminder, AuditLog),
-  with `startAt`/`endAt` as `timestamptz` and soft-delete on `Event` so Undo
-  restores a row instead of re-creating it.
-- `src/server/services` + `src/server/repositories` — the
-  `UI -> service -> repository -> Prisma` boundary from §6/§9. Every service
-  call asserts workspace membership before touching data; the repository
-  itself never makes an authorization decision.
-- `src/app/api/events` — REST-ish route handlers matching §12, backed by a
-  Supabase-session-aware server client (`src/lib/supabase/server.ts`).
-- `src/features/calendar` and `src/features/events` — the component/hook
-  split from §9, with the prototype's interactions ported over:
-  - `layoutDay()` (`features/calendar/lib/layout-events.ts`) is the old
-    `layout()` function, now pure and unit-tested (`tests/unit`).
-  - `useEventDrag` reimplements drag-to-move/resize on Pointer Events with
-    15-minute snapping (§2). A keyboard alternative for the same action is
-    flagged as a follow-up in that file's comment, not yet built.
-  - `useCalendarEvents` / `useEventMutations` replace `localStorage` with
-    TanStack Query against `/api/events`, including optimistic move/resize
-    and delete with rollback on failure.
-  - `EventDialog` is the old modal, now a controlled form with the same
-    validation message ("End time must be after the start time").
-- `src/lib/icons` — every glyph in the UI (menu, chevrons, plus, search, the
-  four view icons, pin, trash, close) is a plain inline SVG component. The
-  browser-tab icon is an SVG data URI (`FAVICON_SVG_DATA_URI`), not an emoji.
+**Auth & tenancy (Notebook v3 §2.1):**
+* Supabase Auth (`src/lib/supabase/{server,browser}.ts`, `middleware.ts` token refresh, `src/app/auth/callback/route.ts`)
+* `/login` (email/password + Google OAuth `signInWithOAuth`)
+* Server resolver `src/app/page.tsx` → `resolveDefaultWorkspace` / `ensureDefaultWorkspaceForUser` (`src/server/services/workspace-service.ts`) — never trusts client `workspaceId`; auto-creates `UserProfile` + `Workspace` + `Membership owner` + 4 calendars (`Work`/`Personal`/`Study`/`Health`) idempotently inside a transaction
+* Demo mode is explicit only: `TEMPO_DEMO_MODE=true && NODE_ENV !== "production"` (`src/lib/supabase/server.ts`); otherwise missing env fails closed (`500`)
 
-## What's intentionally not done yet
+**Domain:**
+* `prisma/schema.prisma` — `UserProfile`, `Workspace` (`slug` unique), `Membership` (`owner|admin|member|viewer`, `@@unique(workspace,member)`), `Calendar` (`is_default` partial unique index), `Event` (`timestamptz` + `timezone` + `allDay` + `deletedAt` soft-delete), `RecurrenceRule`, `Attendee`, `Reminder`, `AuditLog`
+* `src/server/services` + `repositories` — `UI → hooks/API → route → service (authz) → repository → Prisma` boundary; every service asserts `assertWorkspaceMember` / `assertCanWriteWorkspace` / `assertCanManageCalendar(s)`
 
-Per the notebook's own §31 ("things not to build yet") and §28 phase order,
-this scaffold stops short of:
+**Calendar product (prototype parity):**
+* `src/features/calendar/components/CalendarShell.tsx` — Day/Week/Month/Agenda (same `useCalendarEvents` query), debounced search `q`, calendar filter with correct empty handling, keyboard shortcuts `t/d/w/m/a/c/j/k/Arrow` + `/`
+* `TimeGrid` — `layoutDay` overlap, civil-day segmentation (`src/features/calendar/lib/event-segmentation.ts` `segmentEventsForDays` + `layoutSegments` — no fake `EventRecord` timezone bug), `tg-all` all-day chips (multi-day aware), `col today` + `now` line, drag column move (horizontal `startX` → target `data-day`) + vertical snap 15m, cross-midnight duration via `durationMs`, **resize disabled when `startK !== endK`**
+* `MonthView` / `AgendaView` — `Mon-Sun` grid 42 cells, `chip` 3 + `more` + `dots` (mobile), `empty` state, agenda `Next 30 days` from anchor
+* `MiniCalendar` + `UpNext` — `mgrid` 42 days `md today/sel/in` + dots per `eventsByDate`, tomorrow via `addDays(..., timeZone)` + `minutesOfDay(..., timeZone)`
+* `EventDialog` — Calendar picks, Date/Start/End/End-date/Timezone, All-day, Location, Notes, `isSaving` keeps dialog open until success
+* Mobile — `side` drawer + `backdrop`, `tabs` 4-col, `fab`, responsive `@media 760px`
 
-- Auth screens (sign up/in/out) and session bootstrapping — `src/lib/supabase`
-  has both client factories, but no `/login` route yet.
-- Row Level Security policies (`supabase/migrations`, `supabase/tests` are
-  empty placeholders) — service-layer membership checks exist, but the DB
-  itself doesn't yet enforce them for direct client access.
-- Month and Agenda view components (`TimeGrid` for Day/Week is ported;
-  `MonthView`/`AgendaView` are listed in the target structure but not written).
-- Recurrence, attendees, reminders, sharing — modeled in Prisma, no service
-  logic yet.
-- Calendars as real database rows — `CalendarShell` still uses a hardcoded
-  `DEMO_CALENDARS` array as a placeholder for the future `/api/calendars`
-  fetch, per notebook §3.3.
+**Security:**
+* `supabase/migrations/0001_enable_rls.sql` — RLS enabled on 8 tables + policies for `user_profiles`, `workspaces`, `memberships`, `calendars`, `events`, `attendees`, `reminders`, `audit_logs`, `recurrence_rules` (viewer read-only, member write, `owner|admin` manage calendars); `REVOKE anon`, partial unique `calendars_one_default_per_workspace`
+* `src/lib/dates/date-utils.ts` — civil `addDays(date, n, timeZone)`, `mondayOf`, `addMonths`, `toInstant` (no dead DST round-trip), `titleForView` agenda `Next 30 days`, half-open `[start,end)` in `event-repository.ts`
 
-## Running it
-
-This needs a Supabase project and real env vars (`.env.example`) before
-`npm run dev` will do anything useful — it isn't runnable in this sandbox.
-
+**Running:**
 ```bash
 npm install
-cp .env.example .env        # fill in Supabase + DATABASE_URL/DIRECT_URL
-npm run prisma:migrate
+cp .env.example .env  # fill NEXT_PUBLIC_SUPABASE_URL (+PUBLISHABLE_KEY), SUPABASE_SECRET_KEY, DATABASE_URL (6543 pgbouncer), DIRECT_URL (5432)
+# set TEMPO_DEMO_MODE=true for local mock without DB, otherwise leave false
+npx prisma migrate dev --name init  # or npx prisma db push
+npm run prisma:seed   # 19 prototype events for current monday
 npm run dev
 ```
 
-## Next steps, in the notebook's order
+## Next (intentionally deferred per §31)
 
-1. Wire `src/lib/supabase` into real sign-in/sign-up routes (§28 Phase 2).
-2. Write the Supabase migrations + RLS policies for `events`, `calendars`,
-   `memberships` (§28 Phase 4) and the allowed/denied tests it calls for (§27).
-3. Build `MonthView` and `AgendaView` alongside `TimeGrid`, both reading from
-   the same `useCalendarEvents` hook (§1: "one event query/domain model").
-4. Replace `DEMO_CALENDARS` with `/api/calendars`, backed by the `Calendar`
-   model that already exists in Prisma.
+Recurrence `RRULE` expansion + exceptions, Reminder delivery (background queue), Attendee invite flow, Realtime `supabase Realtime` for shared calendars, external sync (`IntegrationAccount`), billing (`Plan/Subscription`).
+
+See `tempo-construction-notebook-v3.md` for the hardening → RLS → recurrence → collaboration sequence.

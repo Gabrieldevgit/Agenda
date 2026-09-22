@@ -8,10 +8,10 @@ async function requireUser() {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) return user;
-    if (isDemoMode()) return { id: "demo-user" } as any; // demo bypass so PATCH/DELETE don't 401
+    if (isDemoMode()) return { id: "demo-user" } as unknown as { id: string }; // demo bypass so PATCH/DELETE don't 401
     return null;
   } catch {
-    if (isDemoMode()) return { id: "demo-user" } as any;
+    if (isDemoMode()) return { id: "demo-user" } as unknown as { id: string };
     return null;
   }
 }

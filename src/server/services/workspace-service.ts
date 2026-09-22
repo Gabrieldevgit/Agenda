@@ -114,7 +114,8 @@ export async function getUserWorkspaceOrThrow(userId: string, requestedWorkspace
 /**
  * Auto-onboarding for real Supabase users (fixes "No workspace found").
  * The seed only covers `seed-user`; a user who just signed up via /login has no
- * UserProfile/Workspace/Membership/Calendars yet. This creates them idempotently.
+ * UserProfile/Workspace/Membership/Calendars yet. This creates them idempotently
+ * inside a transaction to avoid race duplication (P1 §12).
  */
 export async function ensureDefaultWorkspaceForUser(
   userId: string,
@@ -123,67 +124,61 @@ export async function ensureDefaultWorkspaceForUser(
   const existing = await resolveDefaultWorkspace(userId);
   if (existing) return existing;
 
-  // Ensure UserProfile exists (linked 1:1 to auth.users.id)
-  const displayName =
-    opts?.displayName?.trim() ||
-    (opts?.email ? opts.email.split("@")[0]! : null) ||
-    `User ${userId.slice(0, 8)}`;
-  await prisma.userProfile.upsert({
-    where: { id: userId },
-    update: {},
-    create: {
-      id: userId,
-      displayName,
-      defaultTimezone: "America/Toronto",
-    },
-  });
+  return prisma.$transaction(async (tx) => {
+    const recheck = await tx.membership.findFirst({ where: { userId } });
+    if (recheck) return { workspaceId: recheck.workspaceId, role: recheck.role as MembershipRole };
 
-  // Create workspace + ownership + default calendars
-  const baseSlug = (opts?.email ? opts.email.split("@")[0]! : `user-${userId.slice(0, 8)}`)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 20) || `user-${userId.slice(0, 8)}`;
-  let slug = baseSlug;
-  let suffix = 0;
-  while (await prisma.workspace.findUnique({ where: { slug } })) {
-    suffix += 1;
-    slug = `${baseSlug}-${suffix}`;
-    if (suffix > 10) slug = `user-${userId.slice(0, 12)}-${Date.now()}`;
-  }
-
-  const workspace = await prisma.workspace.create({
-    data: {
-      name: `${displayName}'s Workspace`,
-      slug,
-      ownerId: userId,
-    },
-  });
-
-  await prisma.membership.create({
-    data: {
-      workspaceId: workspace.id,
-      userId,
-      role: "owner",
-    },
-  });
-
-  const defaults: { name: string; color: string; isDefault: boolean }[] = [
-    { name: "Work", color: "work", isDefault: true },
-    { name: "Personal", color: "personal", isDefault: false },
-    { name: "Study", color: "study", isDefault: false },
-    { name: "Health", color: "health", isDefault: false },
-  ];
-  for (const cal of defaults) {
-    await prisma.calendar.create({
-      data: {
-        workspaceId: workspace.id,
-        name: cal.name,
-        color: cal.color,
-        isDefault: cal.isDefault,
-      },
+    const displayName =
+      opts?.displayName?.trim() ||
+      (opts?.email ? opts.email.split("@")[0]! : null) ||
+      `User ${userId.slice(0, 8)}`;
+    await tx.userProfile.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId, displayName, defaultTimezone: "America/Toronto" },
     });
-  }
 
-  return { workspaceId: workspace.id, role: "owner" };
+    const baseSlug = (opts?.email ? opts.email.split("@")[0]! : `user-${userId.slice(0, 8)}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 20) || `user-${userId.slice(0, 8)}`;
+    let slug = baseSlug;
+    let suffix = 0;
+    while (await tx.workspace.findUnique({ where: { slug } })) {
+      suffix += 1;
+      slug = `${baseSlug}-${suffix}`;
+      if (suffix > 10) slug = `user-${userId.slice(0, 12)}-${Date.now()}`;
+    }
+
+    const workspace = await tx.workspace.create({
+      data: { name: `${displayName}'s Workspace`, slug, ownerId: userId },
+    });
+
+    await tx.membership.create({
+      data: { workspaceId: workspace.id, userId, role: "owner" },
+    });
+
+    const defaults: { name: string; color: string; isDefault: boolean }[] = [
+      { name: "Work", color: "work", isDefault: true },
+      { name: "Personal", color: "personal", isDefault: false },
+      { name: "Study", color: "study", isDefault: false },
+      { name: "Health", color: "health", isDefault: false },
+    ];
+    for (const cal of defaults) {
+      await tx.calendar.create({
+        data: { workspaceId: workspace.id, name: cal.name, color: cal.color, isDefault: cal.isDefault },
+      });
+    }
+
+    return { workspaceId: workspace.id, role: "owner" };
+  });
+}
+
+export async function assertCanManageCalendarsInWorkspace(userId: string, workspaceId: string) {
+  const m = await assertWorkspaceMember(userId, workspaceId);
+  if (!(CAN_MANAGE_CALENDAR as string[]).includes(m.role)) {
+    throw new Error("FORBIDDEN: cannot manage calendars");
+  }
+  return m;
 }

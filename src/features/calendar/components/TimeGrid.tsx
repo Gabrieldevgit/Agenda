@@ -5,11 +5,11 @@
  * Notebook v3 §3.5: Event → EventSegment → layoutSegments → render
  */
 import { useMemo, useRef } from "react";
-import { layoutDay } from "../lib/layout-events";
-import { segmentEventsForDays, toSegmentClampedEvent } from "../lib/event-segmentation";
+import { segmentEventsForDays, layoutSegments } from "../lib/event-segmentation";
 import { dayKey, formatClock, minutesOfDay } from "@/lib/dates/date-utils";
 import type { CalendarSummary, EventRecord } from "../types";
 import { useEventDrag } from "../hooks/useEventDrag";
+import { formatInTimeZone } from "date-fns-tz";
 
 const HOUR = 56;
 function fmt(m: number): string {
@@ -34,14 +34,23 @@ export function TimeGrid({
   const colorOf = (calendarId: string) =>
     calendars.find((c) => c.id === calendarId)?.color ?? "var(--accent)";
 
-  // Notebook v3 §3.5: segment events per visible civil day, then layout clamped copies
+  // Notebook v3 §3.5 + P1 §11: segment timed + all-day per visible civil day
   const segMap = useMemo(() => segmentEventsForDays(events, days, timeZone), [events, days, timeZone]);
   const allDayMap = useMemo(() => {
     const m = new Map<string, EventRecord[]>();
     for (const d of days) m.set(dayKey(d.toISOString(), timeZone), []);
     for (const e of events) if (e.allDay) {
-      const k = dayKey(e.startAt, timeZone);
-      if (m.has(k)) m.get(k)!.push(e);
+      const sk = dayKey(e.startAt, timeZone);
+      const ek = dayKey(e.endAt, timeZone);
+      // All-day spanning multiple civil days (e.g., 3-day conference)
+      if (sk === ek) {
+        if (m.has(sk)) m.get(sk)!.push(e);
+      } else {
+        for (const d of days) {
+          const k = dayKey(d.toISOString(), timeZone);
+          if (k >= sk && k <= ek && m.has(k)) m.get(k)!.push(e);
+        }
+      }
     }
     return m;
   }, [events, days, timeZone]);
@@ -61,8 +70,8 @@ export function TimeGrid({
             const key = dayKey(d.toISOString(), timeZone);
             return (
               <button key={key} className={`dh${key === today ? " today" : ""}`} onClick={() => onSelectDay?.(key)} data-goto={key}>
-                <span>{d.toLocaleDateString("en-US", { weekday: "short" })}</span>
-                <span className="dd">{d.getDate()}</span>
+                <span>{formatInTimeZone(d, timeZone, "EEE")}</span>
+                <span className="dd">{formatInTimeZone(d, timeZone, "d")}</span>
               </button>
             );
           })}
@@ -92,11 +101,7 @@ export function TimeGrid({
           {days.map((d) => {
             const key = dayKey(d.toISOString(), timeZone);
             const segments = segMap.get(key) ?? [];
-            // Layout on clamped copies so layout and render use same interval (§3.5)
-            const clamped = segments.map(toSegmentClampedEvent);
-            // Map clamped id -> segment for original event + continues flags
-            const segByClampedId = new Map(clamped.map((c, i) => [c.id, segments[i]!]));
-            const laidOut = layoutDay(clamped, timeZone);
+            const laidOut = layoutSegments(segments);
             const isToday = key === today;
             return (
               <div
@@ -109,13 +114,13 @@ export function TimeGrid({
                   onCreateAt(key, minutes);
                 }}
               >
-                {laidOut.map(({ event: clampedEv, column, columnCount }) => {
-                  const seg = segByClampedId.get(clampedEv.id)!;
+                {laidOut.map(({ segment: seg, column, columnCount }) => {
                   const orig = seg.event;
                   const start = seg.startMinutes;
                   const end = seg.endMinutes;
                   const h = Math.max(22, ((end - start) * HOUR) / 60 - 2);
                   const range = `${fmt(start)} – ${fmt(end)}`;
+                  const isCrossMidnight = dayKey(orig.startAt, timeZone) !== dayKey(orig.endAt, timeZone);
                   return (
                     <div
                       key={orig.id + (seg.continuesBefore ? "-b" : "") + (seg.continuesAfter ? "-a" : "")}
@@ -137,7 +142,7 @@ export function TimeGrid({
                     >
                       <div className="t">{orig.title}{seg.continuesAfter ? " →" : ""}</div>
                       {h >= 40 && <div className="s">{range}{orig.location && h >= 58 ? ` · ${orig.location}` : ""}</div>}
-                      <div className="rz" onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, orig, "resize"); }} />
+                      {!isCrossMidnight && <div className="rz" onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, orig, "resize"); }} />}
                     </div>
                   );
                 })}

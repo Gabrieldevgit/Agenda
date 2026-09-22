@@ -10,12 +10,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (restored) return NextResponse.json({ event: restored });
     return NextResponse.json({ event: { id, title: "Restored", calendarId: "work", startAt: new Date().toISOString(), endAt: new Date().toISOString(), timezone: "UTC", allDay: false, status: "confirmed" } });
   }
-  let user: any = null;
+  let user: { id: string } | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const res = await supabase.auth.getUser();
-    user = res.data?.user;
-    if (!user && isDemoMode()) user = { id: "demo-user" } as any;
+    user = (res.data?.user as { id: string } | null) ?? null;
+    if (!user && isDemoMode()) user = { id: "demo-user" } as unknown as { id: string };
   } catch {
     if (isDemoMode()) return NextResponse.json({ event: { id } });
   }

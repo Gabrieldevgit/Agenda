@@ -6,8 +6,8 @@ import { readApiError } from "@/lib/api/error";
 async function fetchCalendars(workspaceId: string): Promise<CalendarSummary[]> {
   const res = await fetch(`/api/calendars?workspaceId=${encodeURIComponent(workspaceId)}`);
   if (!res.ok) await readApiError(res);
-  const data = await res.json();
-  return (data.calendars as any[]).map((c) => ({
+  const data: { calendars: Array<{ id: string; name: string; color: string; isDefault: boolean; isArchived: boolean }> } = await res.json();
+  return data.calendars.map((c) => ({
     id: c.id,
     name: c.name,
     color: c.color,

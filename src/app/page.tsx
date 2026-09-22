@@ -11,11 +11,11 @@ export default async function Page() {
     return <CalendarShell workspaceId="demo-workspace" timeZone="America/Toronto" />;
   }
 
-  let user: any | null = null;
+  let user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const { data } = await supabase.auth.getUser();
-    user = (data?.user as any) ?? null;
+    user = (data?.user as { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null) ?? null;
   } catch (e) {
     // Supabase not configured and not in demo mode → fail closed
     return (
@@ -47,7 +47,7 @@ export default async function Page() {
     if (!workspaceId) {
       const onboarded = await ensureDefaultWorkspaceForUser(user.id, {
         email: user.email ?? null,
-        displayName: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+        displayName: (user.user_metadata?.full_name as string | undefined) ?? (user.user_metadata?.name as string | undefined) ?? null,
       });
       workspaceId = onboarded.workspaceId;
     }

@@ -106,12 +106,19 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const { create, update, moveOrResize, remove, restore } = useEventMutations(rangeArgs);
 
   function openNewEventAt(dateKey: string, minutes: number) {
+    // P0 §2: invariant — never open dialog without a valid calendar
+    const targetCal = visibleCalendars[0] ?? calendars[0]?.id;
+    if (!targetCal) {
+      setToast({ msg: "Create a calendar first — then add events." });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
     const snapped = Math.round(minutes / 15) * 15;
     const startAt = toInstant(dateKey, snapped, timeZone);
     const endAt = toInstant(dateKey, snapped + 60, timeZone);
     setDialogIsNew(true);
     setDialogDraft({
-      calendarId: visibleCalendars[0] ?? calendars[0]!.id,
+      calendarId: targetCal,
       title: "",
       description: "",
       location: "",
@@ -133,10 +140,10 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     setDialogError("");
     const opts = {
       onSuccess: () => { setDialogDraft(null); setDialogError(""); },
-      onError: (e: any) => setDialogError(e?.message ?? String(e)),
+      onError: (e: unknown) => setDialogError(e instanceof Error ? e.message : String(e)),
     };
-    if (dialogIsNew) create.mutate(draft as any, opts as any);
-    else if (draft.id) update.mutate({ ...draft, id: draft.id } as any, opts as any);
+    if (dialogIsNew) create.mutate(draft, opts);
+    else if (draft.id) update.mutate({ ...draft, id: draft.id }, opts);
   }
 
   function handleDelete() {
@@ -149,7 +156,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         setToast({ msg: "Event deleted.", undoId: id });
         setTimeout(() => setToast(null), 4000);
       },
-      onError: (e: any) => setDialogError(e?.message ?? String(e)),
+      onError: (e: unknown) => setDialogError(e instanceof Error ? e.message : String(e)),
     });
   }
 
@@ -249,18 +256,18 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           {([
             ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon],
           ] as const).map(([v, Icon]) => (
-            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as any)}>
+            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as CalendarView)}>
               <Icon size={16} /> {v[0]!.toUpperCase() + v.slice(1)}
             </button>
           ))}
         </div>
         <button className="icon" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)}><SettingsIcon /></button>
-        <button className="btn primary" onClick={() => openNewEventAt(createDateKey, 9 * 60)}><PlusIcon size={16} /> Create</button>
+        <button className="btn primary" onClick={() => openNewEventAt(createDateKey, 9 * 60)} disabled={!calendars.length} title={!calendars.length ? "Create a calendar first" : undefined} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={16} /> Create</button>
       </header>
 
       <div className="body">
         <aside className={`side${sidebarOpen ? " open" : ""}`} id="side" aria-label="Sidebar">
-          <button className="create" onClick={() => { setSidebarOpen(false); openNewEventAt(createDateKey, 9 * 60); }}><PlusIcon size={20} />Create</button>
+          <button className="create" onClick={() => { setSidebarOpen(false); openNewEventAt(createDateKey, 9 * 60); }} disabled={!calendars.length} title={!calendars.length ? "Create a calendar first" : undefined} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={20} />Create</button>
           <MiniCalendar
             anchor={miniAnchor}
             timeZone={timeZone}
@@ -282,7 +289,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
                 className="calrow"
                 data-cal={cal.id}
                 aria-pressed={visibleCalendars.includes(cal.id)}
-                style={{ ["--c" as string]: cal.color } as any}
+                style={{ ["--c" as string]: cal.color } as unknown as React.CSSProperties}
                 onClick={() =>
                   setVisibleCalendars((ids) =>
                     ids.includes(cal.id) ? ids.filter((id) => id !== cal.id) : [...ids, cal.id]
@@ -294,7 +301,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
             ))}
           </div>
           <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-            <button className="calrow" onClick={() => setSettingsOpen(true)} style={{ ["--c" as string]: "var(--muted)" } as any}>
+            <button className="calrow" onClick={() => setSettingsOpen(true)} style={{ ["--c" as string]: "var(--muted)" } as unknown as React.CSSProperties}>
               <span className="cb" style={{ display: "grid", placeItems: "center", borderColor: "var(--muted)" }}><SettingsIcon size={12} /></span> Settings
             </button>
           </div>
@@ -334,7 +341,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           );
         })}
       </nav>
-      <button className="fab" id="fab" aria-label="Create event" onClick={() => openNewEventAt(createDateKey, 9 * 60)}><PlusIcon size={22} /></button>
+      <button className="fab" id="fab" aria-label="Create event" onClick={() => openNewEventAt(createDateKey, 9 * 60)} disabled={!calendars.length} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={22} /></button>
 
       <EventDialog
         open={dialogDraft !== null}

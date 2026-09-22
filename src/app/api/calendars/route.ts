@@ -17,11 +17,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ calendars: DEMO_CALENDARS });
   }
 
-  let user: any = null;
+  let user: { id: string } | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const res = await supabase.auth.getUser();
-    user = res.data?.user;
+    user = (res.data?.user as { id: string } | null) ?? null;
   } catch (e) {
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: (e as Error).message } }, { status: 500 });
   }
@@ -46,11 +46,11 @@ export async function POST(req: NextRequest) {
     const mock = { id: `cal-${Date.now()}`, workspaceId: body.workspaceId, name: body.name ?? "New Calendar", color: body.color ?? "var(--accent)", isDefault: false, isArchived: false };
     return NextResponse.json({ calendar: mock }, { status: 201 });
   }
-  let user: any = null;
+  let user: { id: string } | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const res = await supabase.auth.getUser();
-    user = res.data?.user;
+    user = (res.data?.user as { id: string } | null) ?? null;
   } catch (e) {
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: (e as Error).message } }, { status: 500 });
   }

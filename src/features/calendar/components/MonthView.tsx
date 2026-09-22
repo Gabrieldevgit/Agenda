@@ -72,7 +72,7 @@ export function MonthView({
             const d = grid[idx]!;
             const key = formatInTimeZone(d, timeZone, "yyyy-MM-dd");
             const list = byDay.get(key) ?? [];
-            const isOut = d.getMonth() !== anchor.getMonth();
+            const isOut = formatInTimeZone(d, timeZone, "MM") !== formatInTimeZone(anchor, timeZone, "MM");
             const isToday = key === todayKey;
             return (
               <div
@@ -81,7 +81,7 @@ export function MonthView({
                 data-date={key}
                 onClick={() => onCreateAt(key, 9 * 60)}
               >
-                <span className="num">{d.getDate()}</span>
+                <span className="num">{formatInTimeZone(d, timeZone, "d")}</span>
                 {list.slice(0, 3).map((ev) => (
                   <button
                     key={ev.id}

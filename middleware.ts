@@ -10,10 +10,13 @@ function anonKey() {
   return process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 }
 
+function isDemoMode(): boolean {
+  return process.env.TEMPO_DEMO_MODE === "true" && process.env.NODE_ENV !== "production";
+}
+
 export async function middleware(request: NextRequest) {
-  // If Supabase not configured and not in explicit demo mode, still try but fail open for unauth routes;
-  // in production missing config should have been caught at build. In demo mode bypass entirely.
-  if ((!process.env.NEXT_PUBLIC_SUPABASE_URL || !anonKey()) && process.env.TEMPO_DEMO_MODE === "true") {
+  // Demo mode is explicit + impossible in production (P0 §3)
+  if ((!process.env.NEXT_PUBLIC_SUPABASE_URL || !anonKey()) && isDemoMode()) {
     return NextResponse.next({ request: { headers: request.headers } });
   }
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !anonKey()) {
