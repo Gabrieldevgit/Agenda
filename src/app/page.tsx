@@ -1,6 +1,6 @@
 import { CalendarShell } from "@/features/calendar/components/CalendarShell";
 import { createSupabaseServerClient, isDemoMode } from "@/lib/supabase/server";
-import { resolveDefaultWorkspace } from "@/server/services/workspace-service";
+import { ensureDefaultWorkspaceForUser, resolveDefaultWorkspace } from "@/server/services/workspace-service";
 import { prisma } from "@/lib/prisma/client";
 import Link from "next/link";
 
@@ -11,7 +11,7 @@ export default async function Page() {
     return <CalendarShell workspaceId="demo-workspace" timeZone="America/Toronto" />;
   }
 
-  let user: { id: string } | null = null;
+  let user: any | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const { data } = await supabase.auth.getUser();
@@ -39,24 +39,23 @@ export default async function Page() {
   }
 
   // Resolve workspace server-side — never trust client-supplied workspaceId
+  // If no workspace exists for this Supabase user (just signed up), auto-onboard them
   let workspaceId: string | null = null;
   try {
     const resolved = await resolveDefaultWorkspace(user.id);
     workspaceId = resolved?.workspaceId ?? null;
+    if (!workspaceId) {
+      const onboarded = await ensureDefaultWorkspaceForUser(user.id, {
+        email: user.email ?? null,
+        displayName: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+      });
+      workspaceId = onboarded.workspaceId;
+    }
   } catch (e) {
     return (
       <div style={{ padding: 32 }}>
         <p>Database unavailable. Try again.</p>
         <p style={{ fontSize: 12, color: "#666" }}>{String((e as Error).message)}</p>
-      </div>
-    );
-  }
-
-  if (!workspaceId) {
-    return (
-      <div style={{ padding: 32 }}>
-        <h1>Workspace setup required</h1>
-        <p>No workspace found for this user. Run onboarding/seed.</p>
       </div>
     );
   }
