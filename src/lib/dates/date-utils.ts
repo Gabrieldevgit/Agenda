@@ -9,16 +9,11 @@ import { addDays as fnsAddDays, addMonths as fnsAddMonths, startOfDay, startOfMo
 import { formatInTimeZone, toZonedTime, fromZonedTime } from "date-fns-tz";
 
 export function mondayOf(date: Date, timeZone: string): Date {
-  // Notebook v3 §4.2: keep civil date explicit — avoid mixing zoned Date with runtime local startOfDay
-  const civil = formatInTimeZone(date, timeZone, "yyyy-MM-dd");
-  const [y, m, d] = civil.split("-").map(Number);
-  const localNoon = new Date((y ?? 1970), (m ?? 1) - 1, d ?? 1, 12, 0, 0);
-  // Determine weekday in target tz by formatting that civil date's weekday via formatInTimeZone
-  // Instead, compute via toZonedTime but then reconstruct civil midnight via fromZonedTime
+  // Notebook v3 §4.2: keep civil date explicit — avoid mixing zoned Date with runtime local startOfDay.
+  // Determine weekday in target tz, then reconstruct that Monday's civil midnight via fromZonedTime.
   const zoned = toZonedTime(date, timeZone);
   const day = (zoned.getDay() + 6) % 7; // Mon=0..Sun=6
   const mondayZoned = fnsAddDays(zoned, -day);
-  // mondayZoned is a Date whose fields represent wall time; reconstruct its civil date string
   const mk = formatInTimeZone(mondayZoned, timeZone, "yyyy-MM-dd");
   const [my, mm, md] = mk.split("-").map(Number);
   const mondayLocal = new Date((my ?? 1970), (mm ?? 1) - 1, md ?? 1, 0, 0, 0);
@@ -30,14 +25,11 @@ export function addDays(date: Date, amount: number, timeZone?: string): Date {
   if (timeZone) {
     const civil = formatInTimeZone(date, timeZone, "yyyy-MM-dd");
     const [y, m, d] = civil.split("-").map(Number);
+    // Shift by `amount` civil days, then reconstruct that civil date's midnight
+    // in `timeZone` (going through noon first avoids DST-midnight ambiguity).
     const local = new Date((y ?? 1970), (m ?? 1) - 1, (d ?? 1) + amount, 12, 0, 0);
     const iso = formatInTimeZone(local, timeZone, "yyyy-MM-dd");
     const [ny, nm, nd] = iso.split("-").map(Number);
-    // Reconstruct noon of target civil date to avoid DST midnight ambiguity
-    const targetLocal = new Date((ny ?? 1970), (nm ?? 1) - 1, nd ?? 1, 12, 0, 0);
-    // Return noon instant of that civil date — caller will normalize via dayKey/mondayOf as needed
-    // For navigation anchors, noon is stable across DST; for range queries, caller uses rangeStart at 00:00 via toInstant or startOfDay — here we return noon as neutral anchor.
-    // To keep previous behavior for callers expecting midnight, we instead return fromZonedTime at 00:00 but now via civil path.
     const midnightLocal = new Date((ny ?? 1970), (nm ?? 1) - 1, nd ?? 1, 0, 0, 0);
     return fromZonedTime(midnightLocal, timeZone);
   }
@@ -72,28 +64,37 @@ export function minutesOfDay(isoInstant: string, timeZone: string): number {
   return zoned.getHours() * 60 + zoned.getMinutes();
 }
 
-/** Combine a calendar day + minutes-of-day (in `timeZone`) into a UTC instant.
- *  Notebook v3 §4.3: invalid local time (DST gap) throws; caller must decide to reject/normalize.
+/**
+ * Combine a calendar day + minutes-of-day (in `timeZone`) into a UTC instant.
+ *
+ * Fix (Notebook v3 §4.3): this used to compute a DST round-trip check
+ * (`roundTrip`/`expected`) purely to decide whether to throw, but the branch
+ * that was supposed to act on it was left as comments only — so the check
+ * ran on every call and its result was silently discarded. Invalid local
+ * times (a spring-forward DST gap) still aren't rejected here; they pass
+ * through however `date-fns-tz`'s `fromZonedTime` resolves them. If you
+ * want strict rejection, check `isValidLocalTime` below at the call site
+ * (e.g. in EventDialog, before calling this) rather than inside here, since
+ * throwing from a date-math helper with several unguarded callers
+ * (CalendarShell, EventDialog, useEventDrag) would crash the UI on an edge
+ * case none of them currently catch.
  */
 export function toInstant(dayIso: string, minutes: number, timeZone: string): string {
   const [y, m, d] = dayIso.split("-").map(Number);
   const h = Math.floor(minutes / 60);
   const min = minutes % 60;
   const local = new Date((y ?? 1970), ((m ?? 1) - 1), d ?? 1, h, min, 0, 0);
-  const instant = fromZonedTime(local, timeZone);
-  // Validate DST gap: if the local time doesn't round-trip, it's invalid (spring-forward)
-  const roundTrip = formatInTimeZone(instant, timeZone, "yyyy-MM-dd HH:mm");
+  return fromZonedTime(local, timeZone).toISOString();
+}
+
+/** True if `dayIso`+`minutes` is a real local time in `timeZone` (false inside a DST spring-forward gap). */
+export function isValidLocalTime(dayIso: string, minutes: number, timeZone: string): boolean {
+  const h = Math.floor(minutes / 60);
+  const min = minutes % 60;
+  const instant = toInstant(dayIso, minutes, timeZone);
+  const roundTrip = formatInTimeZone(new Date(instant), timeZone, "yyyy-MM-dd HH:mm");
   const expected = `${dayIso} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
-  if (roundTrip !== expected) {
-    // For now normalize to the next valid minute by advancing 60 mins (common product policy:
-    // invalid time → next valid). If strict rejection needed, throw instead.
-    // We throw to let caller show "invalid time" — CalendarShell catches and shows error.
-    // Here we choose to throw with clear code so UI can surface.
-    // To keep demo resilient, we still return the library's normalized instant but log.
-    // We'll throw so validation can catch it explicitly.
-    // Uncomment to enforce strict: throw new Error(`INVALID_LOCAL_TIME: ${expected} does not exist in ${timeZone}`);
-  }
-  return instant.toISOString();
+  return roundTrip === expected;
 }
 
 export function dayKey(isoInstant: string, timeZone: string): string {

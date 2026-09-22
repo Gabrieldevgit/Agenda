@@ -3,6 +3,18 @@
  * Pointer-based drag/resize with 15-minute snapping + day-column move.
  * Notebook v3 §3.3/3.4: tracks startX/startY + originDay, computes target civil day via column hit-test,
  * uses instant duration (ms) not minutesOfDay diff to handle cross-midnight.
+ *
+ * Fix: `onMove` had become a no-op, so an event only jumped to its new time
+ * on pointer-up with no feedback while dragging. Restored a live preview —
+ * translate the element while the pointer moves, snapped to the same
+ * 15-minute grid the commit uses, and add/remove the existing `.ev.drag`
+ * class (already styled in globals.css) for the lifted/shadowed look.
+ *
+ * Also removed dead code from the resize branch: it used to compute a
+ * `nextDay` value and then immediately discard it by overwriting `finalEnd`
+ * twice. Resize is still clamped to the end of the origin day (23:59) —
+ * spilling a resize into the next day is not implemented, so the clamp is
+ * now just stated plainly instead of masked by unused calculations.
  */
 import { useCallback, useRef } from "react";
 import { toInstant, dayKey } from "@/lib/dates/date-utils";
@@ -20,30 +32,46 @@ type DragArgs = {
 };
 
 export function useEventDrag({ timeZone, hourHeight, days, gridRef, onMoveOrResize }: DragArgs) {
-  const dragRef = useRef<{ event: EventRecord; mode: "move" | "resize"; startX: number; startY: number; originDayKey: string } | null>(null);
+  const dragRef = useRef<{ event: EventRecord; mode: "move" | "resize"; startX: number; startY: number; originDayKey: string; el: HTMLElement } | null>(null);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent, event: EventRecord, mode: "move" | "resize") => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       const originDayKey = dayKey(event.startAt, timeZone);
-      dragRef.current = { event, mode, startX: e.clientX, startY: e.clientY, originDayKey };
-      const target = e.currentTarget as HTMLElement;
-      target.setPointerCapture(e.pointerId);
+      const el = e.currentTarget as HTMLElement;
+      dragRef.current = { event, mode, startX: e.clientX, startY: e.clientY, originDayKey, el };
+      el.setPointerCapture(e.pointerId);
 
-      const onMove = () => {};
+      const onMove = (moveEvent: PointerEvent) => {
+        const drag = dragRef.current;
+        if (!drag) return;
+        const rawDeltaY = moveEvent.clientY - drag.startY;
+        const snappedDeltaY = Math.round((rawDeltaY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES * (hourHeight / 60);
+        drag.el.classList.add("drag");
+        if (drag.mode === "resize") {
+          const currentHeight = drag.el.getBoundingClientRect().height;
+          drag.el.style.height = `${Math.max(22, currentHeight + snappedDeltaY)}px`;
+        } else {
+          const deltaX = moveEvent.clientX - drag.startX;
+          drag.el.style.transform = `translate(${deltaX}px, ${snappedDeltaY}px)`;
+        }
+      };
+
       const onUp = (upEvent: PointerEvent) => {
-        target.removeEventListener("pointermove", onMove);
-        target.removeEventListener("pointerup", onUp);
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", onUp);
         const drag = dragRef.current;
         dragRef.current = null;
         if (!drag) return;
+        drag.el.classList.remove("drag");
+        drag.el.style.transform = "";
+        drag.el.style.height = "";
 
         const deltaMinutes = Math.round(((upEvent.clientY - drag.startY) / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES;
 
         // Determine target day via horizontal delta / column hit-test (Notebook v3 §3.3)
         let targetDayKey = drag.originDayKey;
         if (drag.mode === "move") {
-          // Prefer hit-testing actual day columns if gridRef available
           if (gridRef?.current) {
             const cols = Array.from(gridRef.current.querySelectorAll<HTMLDivElement>("[data-day]"));
             let found: string | null = null;
@@ -56,7 +84,6 @@ export function useEventDrag({ timeZone, hourHeight, days, gridRef, onMoveOrResi
             }
             if (found) targetDayKey = found;
             else {
-              // Fallback: estimate column from deltaX
               const idx = days.findIndex((d) => dayKey(d.toISOString(), timeZone) === drag.originDayKey);
               if (idx >= 0) {
                 const colWidth = (gridRef.current.getBoundingClientRect().width - 56) / Math.max(1, days.length);
@@ -80,21 +107,11 @@ export function useEventDrag({ timeZone, hourHeight, days, gridRef, onMoveOrResi
           if (deltaMinutes === 0) return;
           const startMin = minutesOfDay(drag.event.startAt, timeZone);
           const endMin = minutesOfDay(drag.event.endAt, timeZone);
-          // Use instant duration for cross-midnight safety? For resize we adjust end only in origin day.
           const newEnd = Math.max(startMin + SNAP_MINUTES, endMin + deltaMinutes);
-          const clampedEnd = Math.max(0, Math.min(24 * 60, newEnd));
-          // If clamped beyond day, it will spill to next day via next render — allow up to 24*60
-          const endInstant = toInstant(drag.originDayKey, clampedEnd === 1440 ? 1439 : clampedEnd, timeZone);
-          // If end is exactly midnight, represent as next day 00:00
-          let finalEnd = endInstant;
-          if (clampedEnd >= 1440) {
-            const nextDay = dayKey(new Date(new Date(endInstant).getTime() + 60000).toISOString(), timeZone);
-            // Actually just use next day 00:00
-            finalEnd = toInstant(targetDayKey === drag.originDayKey ? drag.originDayKey : targetDayKey, 0, timeZone);
-            // Recompute: we wanted next day 00:00 — but resize beyond day should just be end of day
-            finalEnd = toInstant(drag.originDayKey, 1439, timeZone);
-          }
-          // For resize, keep start same, end scaled; if cross-midnight original, preserve that by using duration ms for clamping?
+          // Resizing is clamped to the end of the origin day; it does not
+          // currently spill an event's end into the next day.
+          const clampedEnd = Math.min(1439, newEnd);
+          const finalEnd = toInstant(drag.originDayKey, clampedEnd, timeZone);
           onMoveOrResize(drag.event.id, drag.event.startAt, finalEnd);
         } else {
           // MOVE: Notebook v3 §3.4 cross-midnight duration via ms
@@ -108,8 +125,8 @@ export function useEventDrag({ timeZone, hourHeight, days, gridRef, onMoveOrResi
         }
       };
 
-      target.addEventListener("pointermove", onMove);
-      target.addEventListener("pointerup", onUp);
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", onUp);
     },
     [hourHeight, timeZone, onMoveOrResize, days, gridRef]
   );
