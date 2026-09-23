@@ -13,6 +13,8 @@ import { MonthView } from "./MonthView";
 import { AgendaView } from "./AgendaView";
 import { MiniCalendar } from "./MiniCalendar";
 import { UpNext } from "./UpNext";
+import { RealtimeClock } from "@/features/clock/components/RealtimeClock";
+import { PomodoroTimer } from "@/features/pomodoro/components/PomodoroTimer";
 import { GlobalSearch } from "./GlobalSearch";
 import { EventDialog } from "@/features/events/components/EventDialog";
 import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon } from "@/lib/icons";
@@ -303,6 +305,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       <div className="body">
         <aside className={`side${sidebarOpen ? " open" : ""}`} id="side" aria-label="Sidebar">
           <button className="create" onClick={() => { setSidebarOpen(false); openNewEventAt(createDateKey, 9 * 60); }} disabled={!calendars.length} title={!calendars.length ? "Create a calendar first" : undefined} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={20} />Create</button>
+          <RealtimeClock timeZone={timeZone} />
           <MiniCalendar
             anchor={miniAnchor}
             timeZone={timeZone}
@@ -313,6 +316,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
             selectedRange={selectedRange}
           />
           <UpNext events={events} calendars={calendars} timeZone={timeZone} />
+          <PomodoroTimer />
           <h2>My calendars</h2>
           {calError && <p style={{ fontSize: 12, color: "var(--now)" }}>Calendars failed to load.</p>}
           {calLoading && <p style={{ fontSize: 12, color: "var(--muted)" }}>Loading calendars…</p>}
