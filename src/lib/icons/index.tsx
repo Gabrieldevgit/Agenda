@@ -111,6 +111,18 @@ export const CalendarJumpIcon = (p: IconProps) => (
 export const ArrowRightIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M5 12h14M13 6l6 6-6 6" /></svg>
 );
+export const BookIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 5c2.5-1 5.5-1 8 0v14c-2.5-1-5.5-1-8 0V5Z" />
+    <path d="M20 5c-2.5-1-5.5-1-8 0v14c2.5-1 5.5-1 8 0V5Z" />
+  </svg>
+);
+export const NoteIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M8 8h8M8 12h8M8 16h5" />
+  </svg>
+);
 
 /** Used as the browser-tab favicon (data: URI) instead of an emoji glyph. */
 export const FAVICON_SVG_DATA_URI =

@@ -195,8 +195,8 @@ main { flex: 1; min-width: 0; background: var(--surface); border-radius: 20px 0 
   .side.open { transform: none; }
   .backdrop.open { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(10,12,18,.4); }
   main { border-radius: 20px 20px 0 0; border-left: 0; }
-  .tabs { display: grid; grid-template-columns: repeat(4,1fr); flex: none; background: var(--bg); height: 58px; }
-  .tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; background: transparent; font-size: 11px; font-weight: 600; color: var(--muted); }
+  .tabs { display: grid; grid-template-columns: repeat(5,1fr); flex: none; background: var(--bg); height: 58px; }
+  .tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; background: transparent; font-size: 10px; font-weight: 600; color: var(--muted); padding: 0 2px; }
   .tabs button[aria-pressed="true"] { color: var(--accent); }
   .fab { display: grid; place-items: center; position: fixed; right: 16px; bottom: calc(74px + env(safe-area-inset-bottom,0px)); z-index: 30; width: 56px; height: 56px; border-radius: 18px; border: 0; background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow); }
   .mcell .chip, .mcell .more { display: none; }
@@ -245,4 +245,59 @@ main { flex: 1; min-width: 0; background: var(--surface); border-radius: 20px 0 
   html, body { background: #fff !important; }
   body.printing > *:not(#print-root) { display: none !important; }
   body.printing #print-root { display: block !important; color: #111; font: 12px/1.4 var(--font-body); }
+}
+
+/* ---------------------------------------------------------------------
+ * Notebook view (page-flip book — NotebookView.tsx). Deliberately its own
+ * dark theme regardless of the app's light/dark toggle, matching the
+ * reference mock: dark stage, a stacked-page shadow behind the spine, a
+ * two-page spread, and a Notes field at the foot of each page.
+ * ------------------------------------------------------------------- */
+.notebook { height: 100%; width: 100%; overflow: auto; background: linear-gradient(180deg, #0B1220, #0A0F1C); color: #EAF0FF; padding: 28px 32px; display: flex; flex-direction: column; }
+.nb-head { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; flex: none; }
+.nb-badge { width: 48px; height: 48px; border-radius: 14px; background: #2451FF; display: grid; place-items: center; color: #fff; box-shadow: 0 6px 18px rgba(36,81,255,.45); flex: none; }
+.nb-head h2 { margin: 0; font: 700 26px var(--font-display); letter-spacing: -.02em; }
+.nb-head p { margin: 2px 0 0; color: #93A2C2; font-size: 14px; }
+.nb-stage { flex: 1; display: flex; align-items: center; justify-content: center; gap: 28px; min-height: 360px; }
+.nb-navcol { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
+.nb-navbtn { width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.04); color: #BFD0FF; display: grid; place-items: center; }
+.nb-navbtn:hover:not(:disabled) { background: rgba(70,110,255,.18); border-color: #3D6BFF; color: #fff; }
+.nb-navbtn:disabled { opacity: .3; cursor: default; }
+.nb-navcol span { font-size: 11px; color: #7C8AAE; }
+.nb-book { position: relative; }
+.nb-stack { position: absolute; inset: 0; border-radius: 18px; background: #151C2E; }
+.nb-stack.s3 { transform: translate(14px,10px) rotate(1.2deg); opacity: .35; }
+.nb-stack.s2 { transform: translate(8px,6px) rotate(.6deg); opacity: .55; }
+.nb-stack.s1 { transform: translate(3px,3px); opacity: .8; }
+.nb-spread { position: relative; display: flex; background: #fff; border-radius: 18px; box-shadow: 0 30px 60px rgba(0,0,0,.5); overflow: hidden; animation: nb-turn .28s ease; }
+@keyframes nb-turn { from { opacity: 0; transform: translateX(8px) scale(.99); } to { opacity: 1; transform: none; } }
+.nb-page { width: 340px; max-width: 42vw; padding: 24px 22px 18px; color: #14181F; display: flex; flex-direction: column; }
+.nb-page + .nb-page { border-left: 1px solid #ECEEF3; }
+.nb-page-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #ECEEF3; }
+.nb-day { font: 700 22px var(--font-display); letter-spacing: -.01em; }
+.nb-date { color: #6B7385; font-size: 13px; margin-top: 2px; }
+.nb-week { flex: none; background: #EEF1FF; color: #3D5CFF; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 8px; white-space: nowrap; }
+.nb-events { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow: auto; min-height: 120px; }
+.nb-empty { color: #9AA2B3; font-size: 12.5px; margin: 8px 0; }
+.nb-ev { display: flex; align-items: center; gap: 10px; border: 0; text-align: left; padding: 9px 10px; border-radius: 12px; background: color-mix(in srgb, var(--c) 9%, #fff); width: 100%; }
+.nb-ev:hover { background: color-mix(in srgb, var(--c) 16%, #fff); }
+.nb-time { flex: none; width: 58px; font-size: 11.5px; font-weight: 700; color: #6B7385; }
+.nb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+.nb-evtext { display: flex; flex-direction: column; min-width: 0; }
+.nb-evtext b { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-evtext small { font-size: 11px; color: #8189A0; }
+.nb-notes { border-top: 1px solid #ECEEF3; padding-top: 10px; margin-top: 10px; flex: none; }
+.nb-notes-h { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: #6B7385; margin-bottom: 6px; }
+.nb-notes textarea { width: 100%; border: 0; background: transparent; resize: none; font: inherit; font-size: 12.5px; color: #3A4256; min-height: 34px; padding: 0; }
+.nb-notes textarea::placeholder { color: #B7BECC; }
+.nb-notes textarea:focus { outline: none; }
+.nb-pagenum { text-align: center; font-size: 11px; color: #B0B6C4; margin-top: 10px; flex: none; }
+@media (max-width: 760px) {
+  .notebook { padding: 18px 14px; }
+  .nb-head h2 { font-size: 22px; }
+  .nb-stage { gap: 10px; min-height: 300px; }
+  .nb-navbtn { width: 40px; height: 40px; }
+  .nb-navcol span { display: none; }
+  .nb-page { width: 78vw; max-width: 78vw; padding: 18px 16px 14px; }
+  .nb-page + .nb-page { display: none; }
 }
