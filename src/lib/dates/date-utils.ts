@@ -20,6 +20,19 @@ export function mondayOf(date: Date, timeZone: string): Date {
   return fromZonedTime(mondayLocal, timeZone);
 }
 
+export function startOfWeek(date: Date, timeZone: string, weekStart: "monday" | "sunday" = "monday"): Date {
+  if (weekStart === "sunday") {
+    const zoned = toZonedTime(date, timeZone);
+    const dow = zoned.getDay(); // 0 Sun
+    const sundayZoned = fnsAddDays(zoned, -dow);
+    const mk = formatInTimeZone(sundayZoned, timeZone, "yyyy-MM-dd");
+    const [my, mm, md] = mk.split("-").map(Number);
+    const local = new Date((my ?? 1970), (mm ?? 1) - 1, md ?? 1, 0, 0, 0);
+    return fromZonedTime(local, timeZone);
+  }
+  return mondayOf(date, timeZone);
+}
+
 export function addDays(date: Date, amount: number, timeZone?: string): Date {
   // Notebook v3 §4.1: calendar day should be civil, not 24h instant, when timezone given
   if (timeZone) {
@@ -105,11 +118,15 @@ export function formatClock(isoInstant: string, timeZone: string): string {
   return formatInTimeZone(new Date(isoInstant), timeZone, "h:mm a");
 }
 
-export function formatRange(startIso: string, endIso: string, timeZone: string): string {
-  return `${formatClock(startIso, timeZone)} – ${formatClock(endIso, timeZone)}`;
+export function formatClockWithFormat(isoInstant: string, timeZone: string, timeFormat: "12h" | "24h" = "12h"): string {
+  return formatInTimeZone(new Date(isoInstant), timeZone, timeFormat === "24h" ? "HH:mm" : "h:mm a");
 }
 
-export function titleForView(anchor: Date, view: "day" | "week" | "month" | "agenda", timeZone: string): string {
+export function formatRange(startIso: string, endIso: string, timeZone: string, timeFormat: "12h" | "24h" = "12h"): string {
+  return `${formatClockWithFormat(startIso, timeZone, timeFormat)} – ${formatClockWithFormat(endIso, timeZone, timeFormat)}`;
+}
+
+export function titleForView(anchor: Date, view: "day" | "week" | "month" | "agenda", timeZone: string, weekStart: "monday" | "sunday" = "monday"): string {
   if (view === "day") {
     return formatInTimeZone(anchor, timeZone, "EEEE, MMMM d, yyyy");
   }
@@ -127,13 +144,13 @@ export function titleForView(anchor: Date, view: "day" | "week" | "month" | "age
     return `${formatInTimeZone(start, timeZone, "MMM d, yyyy")} – ${formatInTimeZone(end, timeZone, "MMM d, yyyy")}`;
   }
   // week
-  const monday = mondayOf(anchor, timeZone);
-  const sunday = addDays(monday, 6, timeZone);
-  const sameMonth = formatInTimeZone(monday, timeZone, "MMM") === formatInTimeZone(sunday, timeZone, "MMM");
+  const start = startOfWeek(anchor, timeZone, weekStart);
+  const end = addDays(start, 6, timeZone);
+  const sameMonth = formatInTimeZone(start, timeZone, "MMM") === formatInTimeZone(end, timeZone, "MMM");
   if (sameMonth) {
-    return `${formatInTimeZone(monday, timeZone, "MMM d")} – ${formatInTimeZone(sunday, timeZone, "d, yyyy")}`;
+    return `${formatInTimeZone(start, timeZone, "MMM d")} – ${formatInTimeZone(end, timeZone, "d, yyyy")}`;
   }
-  return `${formatInTimeZone(monday, timeZone, "MMM d")} – ${formatInTimeZone(sunday, timeZone, "MMM d, yyyy")}`;
+  return `${formatInTimeZone(start, timeZone, "MMM d")} – ${formatInTimeZone(end, timeZone, "MMM d, yyyy")}`;
 }
 
 /** Split an event that spans civil days into per-day display segments (Notebook v2 §24). */

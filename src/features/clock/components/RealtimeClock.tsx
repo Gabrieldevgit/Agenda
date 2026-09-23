@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { formatInTimeZone } from "date-fns-tz";
+import { useSettings } from "@/lib/settings";
 
 export function RealtimeClock({ timeZone }: { timeZone: string }) {
   const [now, setNow] = useState<Date | null>(null);
+  const { settings } = useSettings();
 
   useEffect(() => {
     setNow(new Date());
@@ -45,7 +47,8 @@ export function RealtimeClock({ timeZone }: { timeZone: string }) {
     );
   }
 
-  const time = formatInTimeZone(now, timeZone, "h:mm:ss a");
+  const fmt = settings.timeFormat === "24h" ? "HH:mm:ss" : "h:mm:ss a";
+  const time = formatInTimeZone(now, timeZone, fmt);
   const date = formatInTimeZone(now, timeZone, "EEEE, MMM d");
   const tzAbbr = formatInTimeZone(now, timeZone, "zzz");
 

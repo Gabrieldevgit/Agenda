@@ -9,6 +9,7 @@ export function MonthView({
   events,
   calendars,
   timeZone,
+  weekStart = "monday",
   onSelectEvent,
   onCreateAt,
 }: {
@@ -16,15 +17,17 @@ export function MonthView({
   events: EventRecord[];
   calendars: CalendarSummary[];
   timeZone: string;
+  weekStart?: "monday" | "sunday";
   onSelectEvent: (id: string) => void;
   onCreateAt: (dateKey: string, minutes: number) => void;
 }) {
   const colorOf = (id: string) => calendars.find((c) => c.id === id)?.color ?? "var(--accent)";
 
+  const weekdays = weekStart === "sunday" ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const { grid, daysInMonth } = useMemo(() => {
     const zoned = toZonedTime(anchor, timeZone);
     const monthStart = new Date(zoned.getFullYear(), zoned.getMonth(), 1);
-    const startDow = (monthStart.getDay() + 6) % 7; // Mon=0
+    const startDow = weekStart === "sunday" ? monthStart.getDay() : (monthStart.getDay() + 6) % 7;
     const cells: Date[] = [];
     const start = new Date(monthStart);
     start.setDate(1 - startDow);
@@ -35,7 +38,7 @@ export function MonthView({
     }
     const daysInMonthVal = new Date(zoned.getFullYear(), zoned.getMonth() + 1, 0).getDate();
     return { grid: cells, daysInMonth: daysInMonthVal };
-  }, [anchor, timeZone]);
+  }, [anchor, timeZone, weekStart]);
 
   // Notebook v3 §3.2: month must show each touched day, not just start
   const byDay = useMemo(() => {
@@ -59,7 +62,7 @@ export function MonthView({
   return (
     <div className="month">
       <div className="mrow">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+        {weekdays.map((d) => (
           <div key={d} className="mh">
             {d}
           </div>

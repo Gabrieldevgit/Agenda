@@ -5,7 +5,7 @@
  * prototype chrome parity (brand, mini calendar, UpNext, all-day row, tabs/FAB, keyboard).
  */
 import { useEffect, useMemo, useState } from "react";
-import { addDays, addMonths, mondayOf, titleForView, toInstant } from "@/lib/dates/date-utils";
+import { addDays, addMonths, mondayOf, startOfWeek, titleForView, toInstant } from "@/lib/dates/date-utils";
 import { useCalendarEvents, useEventMutations } from "../hooks/useCalendarEvents";
 import { useCalendars } from "../hooks/useCalendars";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +22,7 @@ import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthView
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { PrintDialog } from "@/features/print/components/PrintDialog";
 import { useRealtimeEvents } from "../hooks/useRealtimeEvents";
+import { useSettings } from "@/lib/settings";
 import type { CalendarSummary, CalendarView, EventDraft, EventRecord } from "../types";
 import { dayKey } from "@/lib/dates/date-utils";
 import { formatInTimeZone } from "date-fns-tz";
@@ -53,8 +54,9 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const [printOpen, setPrintOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [lastReset, setLastReset] = useState<{ ids: string[]; count: number } | null>(null);
-
-  // Debounce search (Notebook v2 §17/39)
+  const { settings } = useSettings();
+  const effectiveTimeZone = settings.timezone || timeZone;
+  const weekStart = settings.weekStart;
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(searchInput.trim()), 300);
     return () => clearTimeout(t);
@@ -85,29 +87,34 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const days = useMemo(() => {
     if (view === "day") return [anchor];
     if (view === "month") {
-      const monday = mondayOf(anchor, timeZone);
-      return Array.from({ length: 7 }, (_, i) => addDays(monday, i, timeZone));
+      const start = startOfWeek(anchor, effectiveTimeZone, weekStart);
+      return Array.from({ length: 7 }, (_, i) => addDays(start, i, effectiveTimeZone));
     }
     if (view === "agenda") return [anchor];
-    const monday = mondayOf(anchor, timeZone);
-    return Array.from({ length: 7 }, (_, i) => addDays(monday, i, timeZone));
-  }, [view, anchor, timeZone]);
+    const start = startOfWeek(anchor, effectiveTimeZone, weekStart);
+    const all = Array.from({ length: 7 }, (_, i) => addDays(start, i, effectiveTimeZone));
+    if (!settings.showWeekends && view === "week") {
+      // Hide Sat/Sun: for monday start, idx 5,6 are Sat,Sun; for sunday start, idx 0 and 6
+      return all.filter((_, idx) => (weekStart === "monday" ? idx < 5 : idx !== 0 && idx !== 6));
+    }
+    return all;
+  }, [view, anchor, effectiveTimeZone, weekStart, settings.showWeekends]);
 
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (view === "month") {
       const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-      const m = mondayOf(monthStart, timeZone);
-      return { rangeStart: m, rangeEnd: addDays(m, 42, timeZone) };
+      const m = startOfWeek(monthStart, effectiveTimeZone, weekStart);
+      return { rangeStart: m, rangeEnd: addDays(m, 42, effectiveTimeZone) };
     }
     if (view === "agenda") {
-      return { rangeStart: anchor, rangeEnd: addDays(anchor, 30, timeZone) };
+      return { rangeStart: anchor, rangeEnd: addDays(anchor, 30, effectiveTimeZone) };
     }
     if (view === "day") {
       const s = days[0]!;
-      return { rangeStart: s, rangeEnd: addDays(s, 1, timeZone) };
+      return { rangeStart: s, rangeEnd: addDays(s, 1, effectiveTimeZone) };
     }
-    return { rangeStart: days[0]!, rangeEnd: addDays(days[days.length - 1]!, 1, timeZone) };
-  }, [view, days, anchor, timeZone]);
+    return { rangeStart: days[0]!, rangeEnd: addDays(days[days.length - 1]!, 1, effectiveTimeZone) };
+  }, [view, days, anchor, effectiveTimeZone, weekStart]);
 
   const rangeArgs = { workspaceId, calendarIds: visibleCalendars, rangeStart, rangeEnd, q: debouncedQ || undefined };
   const { data: events = [], isLoading, isError } = useCalendarEvents(rangeArgs);
@@ -163,15 +170,17 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
 
   function openNewEventAt(dateKey: string, minutes: number) {
     // P0 §2: invariant — never open dialog without a valid calendar
-    const targetCal = visibleCalendars[0] ?? calendars[0]?.id;
+    const preferred = settings.defaultCalendarId && calendars.some((c) => c.id === settings.defaultCalendarId) ? settings.defaultCalendarId : null;
+    const targetCal = preferred ?? visibleCalendars[0] ?? calendars[0]?.id;
     if (!targetCal) {
       setToast({ msg: "Create a calendar first — then add events." });
       setTimeout(() => setToast(null), 3000);
       return;
     }
     const snapped = Math.round(minutes / 15) * 15;
-    const startAt = toInstant(dateKey, snapped, timeZone);
-    const endAt = toInstant(dateKey, snapped + 60, timeZone);
+    const dur = settings.defaultDuration || 60;
+    const startAt = toInstant(dateKey, snapped, effectiveTimeZone);
+    const endAt = toInstant(dateKey, snapped + dur, effectiveTimeZone);
     setDialogIsNew(true);
     setDialogDraft({
       calendarId: targetCal,
@@ -180,7 +189,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       location: "",
       startAt,
       endAt,
-      timezone: timeZone,
+      timezone: effectiveTimeZone,
       allDay: false,
     });
   }
@@ -239,18 +248,19 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   }
 
   function handlePrev() {
-    if (view === "day") setAnchor((d) => addDays(d, -1, timeZone));
-    else if (view === "week" || view === "agenda") setAnchor((d) => addDays(d, -7, timeZone));
-    else if (view === "month") setAnchor((d) => addMonths(d, -1, timeZone));
+    if (view === "day") setAnchor((d) => addDays(d, -1, effectiveTimeZone));
+    else if (view === "week" || view === "agenda") setAnchor((d) => addDays(d, -7, effectiveTimeZone));
+    else if (view === "month") setAnchor((d) => addMonths(d, -1, effectiveTimeZone));
   }
   function handleNext() {
-    if (view === "day") setAnchor((d) => addDays(d, 1, timeZone));
-    else if (view === "week" || view === "agenda") setAnchor((d) => addDays(d, 7, timeZone));
-    else if (view === "month") setAnchor((d) => addMonths(d, 1, timeZone));
+    if (view === "day") setAnchor((d) => addDays(d, 1, effectiveTimeZone));
+    else if (view === "week" || view === "agenda") setAnchor((d) => addDays(d, 7, effectiveTimeZone));
+    else if (view === "month") setAnchor((d) => addMonths(d, 1, effectiveTimeZone));
   }
 
-  const title = titleForView(anchor, view, timeZone);
-  const createDateKey = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
+  const title = titleForView(anchor, view, effectiveTimeZone, weekStart);
+
+  const createDateKey = formatInTimeZone(anchor, effectiveTimeZone, "yyyy-MM-dd");
   const isSaving = create.isPending || update.isPending;
 
   // Keyboard shortcuts (prototype parity)
@@ -356,17 +366,18 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       <div className="body">
         <aside className={`side${sidebarOpen ? " open" : ""}`} id="side" aria-label="Sidebar">
           <button className="create" onClick={() => { setSidebarOpen(false); openNewEventAt(createDateKey, 9 * 60); }} disabled={!calendars.length} title={!calendars.length ? "Create a calendar first" : undefined} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={20} />Create</button>
-          <RealtimeClock timeZone={timeZone} />
+          <RealtimeClock timeZone={effectiveTimeZone} />
           <MiniCalendar
             anchor={miniAnchor}
-            timeZone={timeZone}
+            timeZone={effectiveTimeZone}
+            weekStart={weekStart}
             eventsByDate={eventsByDate}
             onSelect={(iso) => { const [y, m, d] = iso.split("-").map(Number); setAnchor(new Date(y!, m! - 1, d!)); setSidebarOpen(false); }}
-            onPrev={() => setMiniAnchor((d) => addMonths(d, -1, timeZone))}
-            onNext={() => setMiniAnchor((d) => addMonths(d, 1, timeZone))}
+            onPrev={() => setMiniAnchor((d) => addMonths(d, -1, effectiveTimeZone))}
+            onNext={() => setMiniAnchor((d) => addMonths(d, 1, effectiveTimeZone))}
             selectedRange={selectedRange}
           />
-          <UpNext events={events} calendars={calendars} timeZone={timeZone} />
+          <UpNext events={events} calendars={calendars} timeZone={effectiveTimeZone} />
           <PomodoroTimer />
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <h2 style={{ margin: 0 }}>My calendars</h2>
@@ -417,15 +428,15 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           {isLoading ? (
             <p style={{ padding: 16, color: "var(--muted)" }}>Loading…</p>
           ) : view === "month" ? (
-            <MonthView anchor={anchor} events={events} calendars={calendars} timeZone={timeZone} onSelectEvent={openExistingEvent} onCreateAt={openNewEventAt} />
+            <MonthView anchor={anchor} events={events} calendars={calendars} timeZone={effectiveTimeZone} weekStart={weekStart} onSelectEvent={openExistingEvent} onCreateAt={openNewEventAt} />
           ) : view === "agenda" ? (
-            <AgendaView events={events} calendars={calendars} timeZone={timeZone} onSelectEvent={openExistingEvent} anchor={anchor} />
+            <AgendaView events={events} calendars={calendars} timeZone={effectiveTimeZone} onSelectEvent={openExistingEvent} anchor={anchor} />
           ) : (
             <TimeGrid
               days={days}
               events={events}
               calendars={calendars}
-              timeZone={timeZone}
+              timeZone={effectiveTimeZone}
               onSelectEvent={openExistingEvent}
               onCreateAt={openNewEventAt}
               onMoveOrResize={(id, startAt, endAt) => moveOrResize.mutate({ id, startAt, endAt })}
@@ -458,7 +469,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         isSaving={isSaving || remove.isPending}
         externalError={dialogError}
       />
-      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} calendars={calendars} />
       <PrintDialog
         open={printOpen}
         onClose={() => setPrintOpen(false)}

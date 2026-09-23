@@ -11,6 +11,7 @@ export function MiniCalendar({
   onPrev,
   onNext,
   selectedRange,
+  weekStart = "monday",
 }: {
   anchor: Date;
   timeZone: string;
@@ -19,12 +20,14 @@ export function MiniCalendar({
   onPrev: () => void;
   onNext: () => void;
   selectedRange: [string, string];
+  weekStart?: "monday" | "sunday";
 }) {
+  const weekdays = weekStart === "sunday" ? ["S", "M", "T", "W", "T", "F", "S"] : ["M", "T", "W", "T", "F", "S", "S"];
   const { monthLabel, cells, todayKey } = useMemo(() => {
     const label = formatInTimeZone(anchor, timeZone, "MMMM yyyy");
     const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
     const start = new Date(first);
-    const dow = (first.getDay() + 6) % 7; // Mon 0
+    const dow = weekStart === "sunday" ? first.getDay() : (first.getDay() + 6) % 7;
     start.setDate(1 - dow);
     const today = formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd");
     const arr: { date: Date; iso: string; isOut: boolean }[] = [];
@@ -36,7 +39,7 @@ export function MiniCalendar({
       arr.push({ date: d, iso, isOut });
     }
     return { monthLabel: label, cells: arr, todayKey: today };
-  }, [anchor, timeZone]);
+  }, [anchor, timeZone, weekStart]);
 
   const [rs, re] = selectedRange;
   const selectedKey = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
@@ -51,7 +54,7 @@ export function MiniCalendar({
         </span>
       </div>
       <div className="mgrid">
-        {["M", "T", "W", "T", "F", "S", "S"].map((l, i) => (
+        {weekdays.map((l, i) => (
           <div key={`${l}-${i}`} className="wd">
             {l}
           </div>

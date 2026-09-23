@@ -84,6 +84,24 @@ export const PrintIcon = (p: IconProps) => (
     <path d="M8 13h.01" />
   </svg>
 );
+export const ClockIcon = (p: IconProps) => (
+  <svg {...base(p)}><circle cx={12} cy={12} r={9} /><path d="M12 7v5l3 2" /></svg>
+);
+export const BellIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M6 8a6 6 0 0 1 12 0c0 7-6 5-6 9H6s-6-2-6-9a6 6 0 0 1 12 0z" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+);
+export const UserIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx={12} cy={7} r={4} /></svg>
+);
+export const LayoutIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="3" y="3" width="18" height="18" rx={2} /><path d="M3 9h18M9 21V9" /></svg>
+);
+export const GlobeIcon = (p: IconProps) => (
+  <svg {...base(p)}><circle cx={12} cy={12} r={10} /><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" /></svg>
+);
+export const LogOutIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>
+);
 export const CalendarJumpIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="3.5" y="5" width="17" height="15" rx="3" />

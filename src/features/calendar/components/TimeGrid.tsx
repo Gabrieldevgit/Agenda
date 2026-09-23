@@ -10,12 +10,14 @@ import { dayKey, formatClock, minutesOfDay } from "@/lib/dates/date-utils";
 import type { CalendarSummary, EventRecord } from "../types";
 import { useEventDrag } from "../hooks/useEventDrag";
 import { formatInTimeZone } from "date-fns-tz";
+import { useSettings } from "@/lib/settings";
 
 const HOUR = 56;
-function fmt(m: number): string {
+function fmtMinutes(m: number, timeFormat: "12h" | "24h"): string {
   const h = Math.floor(m / 60) % 24;
   const mi = m % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
+  if (timeFormat === "24h") return `${pad(h)}:${pad(mi)}`;
   return (h % 12 || 12) + (mi ? ":" + pad(mi) : "") + " " + (h < 12 ? "AM" : "PM");
 }
 
@@ -57,6 +59,7 @@ export function TimeGrid({
   const gridRef = useRef<HTMLDivElement>(null);
 
   const { onPointerDown } = useEventDrag({ timeZone, hourHeight: HOUR, days, onMoveOrResize, gridRef: gridRef as any });
+  const { settings } = useSettings();
 
   const today = dayKey(new Date().toISOString(), timeZone);
   const nowMinutes = minutesOfDay(new Date().toISOString(), timeZone);
@@ -95,7 +98,7 @@ export function TimeGrid({
         <div className="tg-body" ref={gridRef as any} style={{ height: HOUR * 24 }}>
           <div className="gutter">
             {Array.from({ length: 23 }, (_, i) => i + 1).map((h) => (
-              <span key={h} style={{ top: h * HOUR }}>{formatClock(new Date().toISOString(), timeZone) && `${h % 12 || 12}${h < 12 ? " AM" : " PM"}`}</span>
+              <span key={h} style={{ top: h * HOUR }}>{settings.timeFormat === "24h" ? `${String(h).padStart(2, "0")}:00` : `${h % 12 || 12}${h < 12 ? " AM" : " PM"}`}</span>
             ))}
           </div>
           {days.map((d) => {
@@ -119,7 +122,7 @@ export function TimeGrid({
                   const start = seg.startMinutes;
                   const end = seg.endMinutes;
                   const h = Math.max(22, ((end - start) * HOUR) / 60 - 2);
-                  const range = `${fmt(start)} – ${fmt(end)}`;
+                  const range = `${fmtMinutes(start, settings.timeFormat)} – ${fmtMinutes(end, settings.timeFormat)}`;
                   const isCrossMidnight = dayKey(orig.startAt, timeZone) !== dayKey(orig.endAt, timeZone);
                   return (
                     <div
