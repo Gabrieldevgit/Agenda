@@ -18,9 +18,10 @@ import { RealtimeClock } from "@/features/clock/components/RealtimeClock";
 import { PomodoroTimer } from "@/features/pomodoro/components/PomodoroTimer";
 import { GlobalSearch } from "./GlobalSearch";
 import { EventDialog } from "@/features/events/components/EventDialog";
-import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon } from "@/lib/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, BookIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { PrintDialog } from "@/features/print/components/PrintDialog";
+import { NotebookView } from "@/features/notebook/components/NotebookView";
 import { useRealtimeEvents } from "../hooks/useRealtimeEvents";
 import { useSettings } from "@/lib/settings";
 import type { CalendarSummary, CalendarView, EventDraft, EventRecord } from "../types";
@@ -249,16 +250,16 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
 
   function handlePrev() {
     if (view === "day") setAnchor((d) => addDays(d, -1, effectiveTimeZone));
-    else if (view === "week" || view === "agenda") setAnchor((d) => addDays(d, -7, effectiveTimeZone));
+    else if (view === "week" || view === "agenda" || view === "notebook") setAnchor((d) => addDays(d, -7, effectiveTimeZone));
     else if (view === "month") setAnchor((d) => addMonths(d, -1, effectiveTimeZone));
   }
   function handleNext() {
     if (view === "day") setAnchor((d) => addDays(d, 1, effectiveTimeZone));
-    else if (view === "week" || view === "agenda") setAnchor((d) => addDays(d, 7, effectiveTimeZone));
+    else if (view === "week" || view === "agenda" || view === "notebook") setAnchor((d) => addDays(d, 7, effectiveTimeZone));
     else if (view === "month") setAnchor((d) => addMonths(d, 1, effectiveTimeZone));
   }
 
-  const title = titleForView(anchor, view, effectiveTimeZone, weekStart);
+  const title = titleForView(anchor, view === "notebook" ? "week" : view, effectiveTimeZone, weekStart);
 
   const createDateKey = formatInTimeZone(anchor, effectiveTimeZone, "yyyy-MM-dd");
   const isSaving = create.isPending || update.isPending;
@@ -351,7 +352,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         />
         <div className="seg" role="group" aria-label="View">
           {([
-            ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon],
+            ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon], ["notebook", BookIcon],
           ] as const).map(([v, Icon]) => (
             <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as CalendarView)}>
               <Icon size={16} /> {v[0]!.toUpperCase() + v.slice(1)}
@@ -431,6 +432,8 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
             <MonthView anchor={anchor} events={events} calendars={calendars} timeZone={effectiveTimeZone} weekStart={weekStart} onSelectEvent={openExistingEvent} onCreateAt={openNewEventAt} />
           ) : view === "agenda" ? (
             <AgendaView events={events} calendars={calendars} timeZone={effectiveTimeZone} onSelectEvent={openExistingEvent} anchor={anchor} />
+          ) : view === "notebook" ? (
+            <NotebookView days={days} events={events} calendars={calendars} timeZone={effectiveTimeZone} timeFormat={settings.timeFormat} workspaceId={workspaceId} onSelectEvent={openExistingEvent} />
           ) : (
             <TimeGrid
               days={days}
@@ -447,8 +450,8 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       </div>
 
       <nav className="tabs" id="tabs" aria-label="Views">
-        {(["day", "week", "month", "agenda"] as const).map((v) => {
-          const Icon = v === "day" ? DayViewIcon : v === "week" ? WeekViewIcon : v === "month" ? MonthViewIcon : AgendaViewIcon;
+        {(["day", "week", "month", "agenda", "notebook"] as const).map((v) => {
+          const Icon = v === "day" ? DayViewIcon : v === "week" ? WeekViewIcon : v === "month" ? MonthViewIcon : v === "agenda" ? AgendaViewIcon : BookIcon;
           return (
             <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v)}>
               <Icon size={16} />{v[0]!.toUpperCase() + v.slice(1)}

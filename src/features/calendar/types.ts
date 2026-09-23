@@ -1,6 +1,6 @@
 /** Shared domain types — UI knows these, not Prisma/Postgres shapes. */
 
-export type CalendarView = "day" | "week" | "month" | "agenda";
+export type CalendarView = "day" | "week" | "month" | "agenda" | "notebook";
 
 export interface CalendarSummary {
   id: string;
