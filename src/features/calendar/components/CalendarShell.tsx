@@ -3,8 +3,9 @@
  * Orchestrator — wires navigation state, server data (useCalendarEvents/useCalendars),
  * and the view components together. Implements Notebook v2/v3 corrections plus
  * prototype chrome parity (brand, mini calendar, UpNext, all-day row, tabs/FAB, keyboard).
+ * Extended with Book, Year, Context Menus, Command Palette, DatePicker per AGENDAspec.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { addDays, addMonths, mondayOf, startOfWeek, titleForView, toInstant } from "@/lib/dates/date-utils";
 import { useCalendarEvents, useEventMutations } from "../hooks/useCalendarEvents";
 import { useCalendars } from "../hooks/useCalendars";
@@ -12,15 +13,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { TimeGrid } from "./TimeGrid";
 import { MonthView } from "./MonthView";
 import { AgendaView } from "./AgendaView";
+import { BookView } from "./BookView";
+import { YearView } from "./YearView";
 import { MiniCalendar } from "./MiniCalendar";
 import { UpNext } from "./UpNext";
 import { RealtimeClock } from "@/features/clock/components/RealtimeClock";
 import { PomodoroTimer } from "@/features/pomodoro/components/PomodoroTimer";
 import { GlobalSearch } from "./GlobalSearch";
 import { EventDialog } from "@/features/events/components/EventDialog";
-import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, BookIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon } from "@/lib/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon, BookIcon, YearViewIcon, CommandIcon, SearchIcon, HomeIcon, CalendarMarkIcon, EditIcon, DuplicateIcon, CopyIcon, CutIcon, PasteIcon, EyeIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { PrintDialog } from "@/features/print/components/PrintDialog";
+import { ContextMenu } from "./ContextMenu";
+import { CommandPalette, type Command } from "./CommandPalette";
 import { NotebookView } from "@/features/notebook/components/NotebookView";
 import { useRealtimeEvents } from "../hooks/useRealtimeEvents";
 import { useSettings } from "@/lib/settings";
@@ -55,6 +60,11 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const [printOpen, setPrintOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [lastReset, setLastReset] = useState<{ ids: string[]; count: number } | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [ctx, setCtx] = useState<null | { x: number; y: number; kind: "event"; eventId: string } | { x: number; y: number; kind: "empty"; dateKey: string; minutes: number }>(null);
+  const clipboardRef = useRef<EventRecord | null>(null);
+  const [cutId, setCutId] = useState<string | null>(null);
   const { settings } = useSettings();
   const effectiveTimeZone = settings.timezone || timeZone;
   const weekStart = settings.weekStart;
@@ -80,7 +90,6 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     }
   }, [serverCalendars]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep mini in sync with anchor's month when anchor moves visibly
   useEffect(() => {
     setMiniAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
   }, [anchor]);
@@ -92,10 +101,11 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       return Array.from({ length: 7 }, (_, i) => addDays(start, i, effectiveTimeZone));
     }
     if (view === "agenda") return [anchor];
+    if (view === "book") return [anchor, addDays(anchor, 1, effectiveTimeZone)];
+    if (view === "year") return [anchor];
     const start = startOfWeek(anchor, effectiveTimeZone, weekStart);
     const all = Array.from({ length: 7 }, (_, i) => addDays(start, i, effectiveTimeZone));
     if (!settings.showWeekends && view === "week") {
-      // Hide Sat/Sun: for monday start, idx 5,6 are Sat,Sun; for sunday start, idx 0 and 6
       return all.filter((_, idx) => (weekStart === "monday" ? idx < 5 : idx !== 0 && idx !== 6));
     }
     return all;
@@ -113,6 +123,16 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     if (view === "day") {
       const s = days[0]!;
       return { rangeStart: s, rangeEnd: addDays(s, 1, effectiveTimeZone) };
+    }
+    if (view === "book") {
+      const s = anchor;
+      return { rangeStart: s, rangeEnd: addDays(s, 2, effectiveTimeZone) };
+    }
+    if (view === "year") {
+      const y = anchor.getFullYear();
+      const s = new Date(y, 0, 1);
+      const e = new Date(y + 1, 0, 1);
+      return { rangeStart: s, rangeEnd: e };
     }
     return { rangeStart: days[0]!, rangeEnd: addDays(days[days.length - 1]!, 1, effectiveTimeZone) };
   }, [view, days, anchor, effectiveTimeZone, weekStart]);
@@ -170,7 +190,6 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   });
 
   function openNewEventAt(dateKey: string, minutes: number) {
-    // P0 §2: invariant — never open dialog without a valid calendar
     const preferred = settings.defaultCalendarId && calendars.some((c) => c.id === settings.defaultCalendarId) ? settings.defaultCalendarId : null;
     const targetCal = preferred ?? visibleCalendars[0] ?? calendars[0]?.id;
     if (!targetCal) {
@@ -195,6 +214,16 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     });
   }
 
+  function openNewAllDayAt(dateKey: string) {
+    const preferred = settings.defaultCalendarId && calendars.some((c) => c.id === settings.defaultCalendarId) ? settings.defaultCalendarId : null;
+    const targetCal = preferred ?? visibleCalendars[0] ?? calendars[0]?.id;
+    if (!targetCal) return;
+    const startAt = toInstant(dateKey, 0, effectiveTimeZone);
+    const endAt = toInstant(dateKey, 24 * 60, effectiveTimeZone);
+    setDialogIsNew(true);
+    setDialogDraft({ calendarId: targetCal, title: "", description: "", location: "", startAt, endAt, timezone: effectiveTimeZone, allDay: true });
+  }
+
   function openExistingEvent(id: string) {
     const event = events.find((e) => e.id === id);
     if (!event) return;
@@ -202,7 +231,6 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     setDialogDraft(event);
   }
 
-  /** Search bar "Jump to day" — go to that civil day in Day view. */
   function jumpToDay(dateKeyStr: string) {
     const [y, m, d] = dateKeyStr.split("-").map(Number);
     setAnchor(new Date(y!, m! - 1, d!));
@@ -210,7 +238,6 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     setSidebarOpen(false);
   }
 
-  /** Search bar event result — jump to its day and open it, even if it's outside the loaded range. */
   function jumpToEvent(event: EventRecord) {
     const [y, m, d] = dayKey(event.startAt, timeZone).split("-").map(Number);
     setAnchor(new Date(y!, m! - 1, d!));
@@ -220,14 +247,12 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     setDialogDraft(event);
   }
 
-  // Realtime (Supabase Postgres Changes): other clients' creates/edits/deletes
-  // in this workspace's visible calendars refresh this view live.
   useRealtimeEvents({ workspaceId, calendarIds: calendars.map((c) => c.id) });
 
   function handleSave(draft: EventDraft) {
     setDialogError("");
     const opts = {
-      onSuccess: () => { setDialogDraft(null); setDialogError(""); },
+      onSuccess: () => { setDialogDraft(null); setDialogError(""); if (cutId) setCutId(null); },
       onError: (e: unknown) => setDialogError(e instanceof Error ? e.message : String(e)),
     };
     if (dialogIsNew) create.mutate(draft, opts);
@@ -252,27 +277,95 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     if (view === "day") setAnchor((d) => addDays(d, -1, effectiveTimeZone));
     else if (view === "week" || view === "agenda" || view === "notebook") setAnchor((d) => addDays(d, -7, effectiveTimeZone));
     else if (view === "month") setAnchor((d) => addMonths(d, -1, effectiveTimeZone));
+    else if (view === "book") setAnchor((d) => addDays(d, -2, effectiveTimeZone));
+    else if (view === "year") setAnchor((d) => { const nd = new Date(d); nd.setFullYear(nd.getFullYear() - 1); return nd; });
   }
   function handleNext() {
     if (view === "day") setAnchor((d) => addDays(d, 1, effectiveTimeZone));
     else if (view === "week" || view === "agenda" || view === "notebook") setAnchor((d) => addDays(d, 7, effectiveTimeZone));
     else if (view === "month") setAnchor((d) => addMonths(d, 1, effectiveTimeZone));
+    else if (view === "book") setAnchor((d) => addDays(d, 2, effectiveTimeZone));
+    else if (view === "year") setAnchor((d) => { const nd = new Date(d); nd.setFullYear(nd.getFullYear() + 1); return nd; });
   }
 
-  const title = titleForView(anchor, view === "notebook" ? "week" : view, effectiveTimeZone, weekStart);
+  const title = (() => {
+    if (view === "book") {
+      const a = formatInTimeZone(anchor, effectiveTimeZone, "MMM d, yyyy");
+      const b = formatInTimeZone(addDays(anchor, 1, effectiveTimeZone), effectiveTimeZone, "MMM d, yyyy");
+      return `${a} — ${b}`;
+    }
+    if (view === "year") return formatInTimeZone(anchor, effectiveTimeZone, "yyyy");
+    if (view === "notebook") return titleForView(anchor, "week", effectiveTimeZone, weekStart);
+    return titleForView(anchor, view as any, effectiveTimeZone, weekStart);
+  })();
 
   const createDateKey = formatInTimeZone(anchor, effectiveTimeZone, "yyyy-MM-dd");
   const isSaving = create.isPending || update.isPending;
 
-  // Keyboard shortcuts (prototype parity)
+  // ----- context menu helpers -----
+  const handleDuplicate = useCallback((id: string) => {
+    const ev = events.find(e => e.id === id);
+    if (!ev) return;
+    const nextStart = new Date(new Date(ev.startAt).getTime() + 24*3600*1000).toISOString();
+    const nextEnd = new Date(new Date(ev.endAt).getTime() + 24*3600*1000).toISOString();
+    create.mutate({ calendarId: ev.calendarId, title: ev.title + " (copy)", description: ev.description, location: ev.location, startAt: nextStart, endAt: nextEnd, timezone: ev.timezone, allDay: ev.allDay });
+    setToast({ msg: "Duplicated to tomorrow." }); setTimeout(()=>setToast(null),3000);
+  }, [events, create]);
+
+  const handleCopy = useCallback((id: string) => {
+    const ev = events.find(e => e.id === id);
+    if (!ev) return;
+    clipboardRef.current = ev;
+    setCutId(null);
+    setToast({ msg: "Copied." }); setTimeout(()=>setToast(null),1500);
+  }, [events]);
+  const handleCut = useCallback((id: string) => {
+    const ev = events.find(e => e.id === id);
+    if (!ev) return;
+    clipboardRef.current = ev;
+    setCutId(id);
+    setToast({ msg: "Cut — paste to move." }); setTimeout(()=>setToast(null),1500);
+  }, [events]);
+  const handlePaste = useCallback((dateKey: string, minutes: number) => {
+    const src = clipboardRef.current;
+    if (!src) { setToast({ msg: "Nothing to paste." }); setTimeout(()=>setToast(null),1500); return; }
+    const dur = new Date(src.endAt).getTime() - new Date(src.startAt).getTime();
+    const startAt = toInstant(dateKey, Math.round(minutes/15)*15, effectiveTimeZone);
+    const endAt = new Date(new Date(startAt).getTime() + dur).toISOString();
+    if (cutId) {
+      moveOrResize.mutate({ id: cutId, startAt, endAt });
+      clipboardRef.current = null; setCutId(null);
+      setToast({ msg: "Moved." }); setTimeout(()=>setToast(null),1500);
+    } else {
+      create.mutate({ calendarId: src.calendarId, title: src.title, description: src.description, location: src.location, startAt, endAt, timezone: effectiveTimeZone, allDay: false });
+      setToast({ msg: "Pasted." }); setTimeout(()=>setToast(null),1500);
+    }
+  }, [effectiveTimeZone, cutId, create, moveOrResize]);
+  const handleMoveTo = useCallback((id: string, dateKey: string) => {
+    const ev = events.find(e => e.id === id);
+    if (!ev) return;
+    // keep same clock time, new civil day
+    try {
+      const startClock = formatInTimeZone(new Date(ev.startAt), effectiveTimeZone, "HH:mm");
+      const [h,m] = startClock.split(":").map(Number);
+      const startAt = toInstant(dateKey, (h??0)*60+(m??0), effectiveTimeZone);
+      const dur = new Date(ev.endAt).getTime() - new Date(ev.startAt).getTime();
+      const endAt = new Date(new Date(startAt).getTime()+dur).toISOString();
+      moveOrResize.mutate({ id, startAt, endAt });
+    } catch {}
+  }, [events, effectiveTimeZone, moveOrResize]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setCommandOpen(o=>!o); return; }
       if ((e.target as HTMLElement)?.closest?.("input,textarea,select")) {
         if (e.key === "Escape" && dialogDraft) { setDialogDraft(null); setDialogError(""); }
         return;
       }
       if (e.metaKey || e.ctrlKey) {
         if (e.key === "Enter" && dialogDraft) handleSave(dialogDraft);
+        // Ctrl/Cmd+C/V handled by menu, not intercept
         return;
       }
       const k = e.key.toLowerCase();
@@ -281,17 +374,21 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       else if (k === "w") setView("week");
       else if (k === "m") setView("month");
       else if (k === "a") setView("agenda");
-      else if (k === "c") { e.preventDefault(); openNewEventAt(createDateKey, 9 * 60); }
+      else if (k === "b") setView("book");
+      else if (k === "y") setView("year");
+      else if (k === "c" || k === "n") { e.preventDefault(); openNewEventAt(createDateKey, 9 * 60); }
       else if (k === "j" || e.key === "ArrowRight") handleNext();
       else if (k === "k" || e.key === "ArrowLeft") handlePrev();
       else if (e.key === "/") { e.preventDefault(); document.getElementById("global-search-input")?.focus(); }
       else if (e.key === "Escape" && sidebarOpen) setSidebarOpen(false);
+      else if (e.key === "Escape" && commandOpen) setCommandOpen(false);
+      else if (e.key === "Escape" && ctx) setCtx(null);
+      else if (e.key === "Escape" && showDatePicker) setShowDatePicker(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dialogDraft, sidebarOpen, createDateKey, view]);
+  }, [dialogDraft, sidebarOpen, createDateKey, view, commandOpen, ctx, showDatePicker]);
 
-  // For mini dots: every touched civil day (prototype dot per day)
   const eventsByDate = useMemo(() => {
     const s = new Set<string>();
     for (const e of events) {
@@ -299,11 +396,9 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       const ek = dayKey(e.endAt, timeZone);
       s.add(sk);
       if (sk !== ek) {
-        // Walk intermediate civil days (handles multi-day)
         let cur = sk;
         for (let i = 0; i < 30; i++) {
           if (cur >= ek) break;
-          // increment civil day by 1 (use string arithmetic via Date)
           const d = new Date(cur + "T12:00:00");
           d.setDate(d.getDate() + 1);
           cur = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -322,10 +417,43 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       const es = formatInTimeZone(addDays(m, 6, timeZone), timeZone, "yyyy-MM-dd");
       return [ms, es];
     }
-    // Prototype parity: day/month/agenda highlight only anchor day (month/agenda not week range)
+    if (view === "book") {
+      const a = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
+      const b = formatInTimeZone(addDays(anchor, 1, timeZone), timeZone, "yyyy-MM-dd");
+      return [a, b];
+    }
     const k = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd");
     return [k, k];
   }, [view, anchor, timeZone]);
+
+  // swipe for main (day/week quick page turn)
+  const swipeRef = useRef<{ x: number } | null>(null);
+  function onMainPointerDown(e: React.PointerEvent) {
+    if (view === "book" || view === "month" || view === "year") return;
+    swipeRef.current = { x: e.clientX };
+  }
+  function onMainPointerUp(e: React.PointerEvent) {
+    if (!swipeRef.current) return;
+    const dx = e.clientX - swipeRef.current.x;
+    swipeRef.current = null;
+    if (Math.abs(dx) < 60) return;
+    if (dx < 0) handleNext(); else handlePrev();
+  }
+
+  const commands: Command[] = useMemo(() => [
+    { id: "create", label: "Create event", hint: "N", icon: <PlusIcon size={14} />, action: () => openNewEventAt(createDateKey, 9*60), keywords: ["new"] },
+    { id: "today", label: "Go to today", hint: "T", icon: <HomeIcon size={14} />, action: () => setAnchor(new Date()) },
+    { id: "jump", label: "Jump to date…", icon: <CalendarMarkIcon size={14} />, action: () => setShowDatePicker(true) },
+    { id: "search", label: "Search events", hint: "/", icon: <SearchIcon size={14} />, action: () => document.getElementById("global-search-input")?.focus() },
+    { id: "day", label: "Switch to Day", hint: "D", icon: <DayViewIcon size={14} />, action: () => setView("day") },
+    { id: "week", label: "Switch to Week", hint: "W", icon: <WeekViewIcon size={14} />, action: () => setView("week") },
+    { id: "month", label: "Switch to Month", hint: "M", icon: <MonthViewIcon size={14} />, action: () => setView("month") },
+    { id: "agenda", label: "Switch to Agenda", hint: "A", icon: <AgendaViewIcon size={14} />, action: () => setView("agenda") },
+    { id: "book", label: "Switch to Book", hint: "B", icon: <BookIcon size={14} />, action: () => setView("book") },
+    { id: "year", label: "Switch to Year", hint: "Y", icon: <YearViewIcon size={14} />, action: () => setView("year") },
+    { id: "print", label: "Print…", icon: <PrintIcon size={14} />, action: () => setPrintOpen(true) },
+    { id: "settings", label: "Settings", icon: <SettingsIcon size={14} />, action: () => setSettingsOpen(true) },
+  ], [createDateKey]);
 
   return (
     <div className="app">
@@ -338,7 +466,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           <button className="icon" aria-label="Previous" onClick={handlePrev}><ChevronLeftIcon /></button>
           <button className="icon" aria-label="Next" onClick={handleNext}><ChevronRightIcon /></button>
         </div>
-        <h1 id="title" aria-live="polite">{title}</h1>
+        <h1 id="title" aria-live="polite" onClick={() => setShowDatePicker(true)} style={{ cursor:"pointer" }} title="Jump to date">{title}</h1>
         <div style={{ flex: 1 }} />
         <GlobalSearch
           value={searchInput}
@@ -350,12 +478,13 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           onJumpToDay={jumpToDay}
           onJumpToEvent={jumpToEvent}
         />
+        <button className="icon" aria-label="Command palette" title="Command palette (Ctrl+K)" onClick={() => setCommandOpen(true)}><CommandIcon size={18} /></button>
         <div className="seg" role="group" aria-label="View">
           {([
-            ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon], ["notebook", BookIcon],
+            ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon], ["book", BookIcon], ["year", YearViewIcon], ["notebook", BookIcon],
           ] as const).map(([v, Icon]) => (
-            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as CalendarView)}>
-              <Icon size={16} /> {v[0]!.toUpperCase() + v.slice(1)}
+            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as CalendarView)} title={v}>
+              <Icon size={14} /> {v[0]!.toUpperCase() + v.slice(1)}
             </button>
           ))}
         </div>
@@ -424,16 +553,21 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         </aside>
         <div className={`backdrop${sidebarOpen ? " open" : ""}`} id="backdrop" onClick={() => setSidebarOpen(false)} />
 
-        <main id="main">
+        <main id="main" onPointerDown={onMainPointerDown} onPointerUp={onMainPointerUp}>
           {isError && <p role="alert" style={{ padding: 16 }}>Couldn’t load events. Try again.</p>}
           {isLoading ? (
             <p style={{ padding: 16, color: "var(--muted)" }}>Loading…</p>
           ) : view === "month" ? (
-            <MonthView anchor={anchor} events={events} calendars={calendars} timeZone={effectiveTimeZone} weekStart={weekStart} onSelectEvent={openExistingEvent} onCreateAt={openNewEventAt} />
+            <MonthView anchor={anchor} events={events} calendars={calendars} timeZone={effectiveTimeZone} weekStart={weekStart} onSelectEvent={openExistingEvent} onCreateAt={openNewEventAt} onEventContextMenu={(e,id)=>setCtx({x:e.clientX,y:e.clientY,kind:"event",eventId:id})} onEmptyContextMenu={(e,k,mins)=>setCtx({x:e.clientX,y:e.clientY,kind:"empty",dateKey:k,minutes:mins})} />
           ) : view === "agenda" ? (
-            <AgendaView events={events} calendars={calendars} timeZone={effectiveTimeZone} onSelectEvent={openExistingEvent} anchor={anchor} />
+            <AgendaView events={events} calendars={calendars} timeZone={effectiveTimeZone} onSelectEvent={openExistingEvent} anchor={anchor} onEventContextMenu={(e,id)=>setCtx({x:e.clientX,y:e.clientY,kind:"event",eventId:id})} onEmptyContextMenu={(e,k,mins)=>setCtx({x:e.clientX,y:e.clientY,kind:"empty",dateKey:k,minutes:mins})} />
+          ) : view === "book" ? (
+            <BookView anchor={anchor} events={events} calendars={calendars} timeZone={effectiveTimeZone} onSelectEvent={openExistingEvent} onCreateAt={openNewEventAt} onPrev={handlePrev} onNext={handleNext} onGoToday={()=>setAnchor(new Date())} onJumpToDate={(iso)=>jumpToDay(iso)} />
+          ) : view === "year" ? (
+            <YearView anchor={anchor} events={events} calendars={calendars} timeZone={effectiveTimeZone} onSelectDate={(iso)=>{jumpToDay(iso); setView("day");}} />
           ) : view === "notebook" ? (
             <NotebookView days={days} events={events} calendars={calendars} timeZone={effectiveTimeZone} timeFormat={settings.timeFormat} workspaceId={workspaceId} onSelectEvent={openExistingEvent} />
+
           ) : (
             <TimeGrid
               days={days}
@@ -444,16 +578,18 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
               onCreateAt={openNewEventAt}
               onMoveOrResize={(id, startAt, endAt) => moveOrResize.mutate({ id, startAt, endAt })}
               onSelectDay={(iso) => { const [y, m, d] = iso.split("-").map(Number); setAnchor(new Date(y!, m! - 1, d!)); setView("day"); }}
+              onEventContextMenu={(e,id)=>setCtx({x:e.clientX,y:e.clientY,kind:"event",eventId:id})}
+              onEmptyContextMenu={(e,k,mins)=>setCtx({x:e.clientX,y:e.clientY,kind:"empty",dateKey:k,minutes:mins})}
             />
           )}
         </main>
       </div>
 
       <nav className="tabs" id="tabs" aria-label="Views">
-        {(["day", "week", "month", "agenda", "notebook"] as const).map((v) => {
-          const Icon = v === "day" ? DayViewIcon : v === "week" ? WeekViewIcon : v === "month" ? MonthViewIcon : v === "agenda" ? AgendaViewIcon : BookIcon;
+        {(["day", "week", "month", "agenda", "book", "year", "notebook"] as const).map((v) => {
+          const Icon = v === "day" ? DayViewIcon : v === "week" ? WeekViewIcon : v === "month" ? MonthViewIcon : v === "agenda" ? AgendaViewIcon : v === "book" ? BookIcon : v === "year" ? YearViewIcon : BookIcon;
           return (
-            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v)}>
+            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as CalendarView)}>
               <Icon size={16} />{v[0]!.toUpperCase() + v.slice(1)}
             </button>
           );
@@ -482,6 +618,81 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         timeZone={timeZone}
         anchor={anchor}
       />
+
+      {showDatePicker && (
+        <div className="ov" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowDatePicker(false); }}>
+          <div className="dlg" style={{ maxWidth: 320 }} role="dialog" aria-modal="true" aria-label="Jump to date">
+            <h2 style={{ margin:"0 0 10px", font:"700 16px var(--font-display)" }}>Jump to date</h2>
+            <input type="date" value={formatInTimeZone(anchor, effectiveTimeZone, "yyyy-MM-dd")} onChange={(e)=>{ if(e.target.value) {jumpToDay(e.target.value); setShowDatePicker(false);} }} style={{ width:"100%", border:"1px solid var(--line)", borderRadius:10, padding:"10px", background:"var(--bg)", color:"var(--ink)" }} />
+            <div className="acts" style={{ marginTop:12 }}>
+              <button className="btn ghost" onClick={()=>{ setAnchor(new Date()); setShowDatePicker(false); }}>Today</button>
+              <span style={{flex:1}}/>
+              <button className="btn" onClick={()=>setShowDatePicker(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CommandPalette open={commandOpen} onClose={()=>setCommandOpen(false)} commands={commands} />
+
+      {ctx && ctx.kind === "event" && (() => {
+        const ev = events.find(e=>e.id===ctx.eventId);
+        if (!ev) return null;
+        const tomorrowKey = formatInTimeZone(addDays(new Date(),1,effectiveTimeZone), effectiveTimeZone, "yyyy-MM-dd");
+        // next Monday
+        const now = new Date();
+        const dow = now.getDay(); // 0 Sun
+        const daysUntilMon = (8 - dow) % 7 || 7;
+        const nextMonKey = formatInTimeZone(addDays(now, daysUntilMon, effectiveTimeZone), effectiveTimeZone, "yyyy-MM-dd");
+        return (
+          <ContextMenu x={ctx.x} y={ctx.y} onClose={()=>setCtx(null)} sections={[
+            { items: [
+              { label:"Edit", icon:<EditIcon size={14} />, action:()=>openExistingEvent(ctx.eventId) },
+              { label:"Duplicate", icon:<DuplicateIcon size={14} />, action:()=>handleDuplicate(ctx.eventId) },
+            ]},
+            { items: [
+              { label:"Copy", icon:<CopyIcon size={14} />, action:()=>handleCopy(ctx.eventId) },
+              { label: cutId===ctx.eventId ? "Cut — active" : "Cut", icon:<CutIcon size={14} />, action:()=>handleCut(ctx.eventId) },
+            ]},
+            { items: [
+              { label:"Move to tomorrow", icon:<CalendarMarkIcon size={14} />, action:()=>handleMoveTo(ctx.eventId, tomorrowKey) },
+              { label:"Move to next Monday", icon:<CalendarMarkIcon size={14} />, action:()=>handleMoveTo(ctx.eventId, nextMonKey) },
+              { label:"Move to date…", icon:<CalendarMarkIcon size={14} />, action:()=>{ setShowDatePicker(true);
+                setToast({msg:"Pick a date in the title Jump picker, then right-click Move again."}); setTimeout(()=>setToast(null),3000);
+              } },
+            ]},
+            { items: [
+              { label:"Change calendar…", icon:<BookIcon size={14} />, action:()=>{
+                const idx = calendars.findIndex(c=>c.id===ev.calendarId);
+                const next = calendars[(idx+1)%calendars.length];
+                if (next) update.mutate({ ...ev, calendarId: next.id, id: ev.id });
+              }},
+            ]},
+            { items: [
+              { label:"Delete", icon:<TrashIcon size={14} />, danger:true, action:()=>remove.mutate(ctx.eventId) },
+            ]},
+          ]} />
+        );
+      })()}
+
+      {ctx && ctx.kind === "empty" && (
+        <ContextMenu x={ctx.x} y={ctx.y} onClose={()=>setCtx(null)} sections={[
+          { items: [
+            { label:"New Event", icon:<PlusIcon size={14} />, action:()=>openNewEventAt(ctx.dateKey, ctx.minutes) },
+            { label:"New All-Day Event", icon:<CalendarMarkIcon size={14} />, action:()=>openNewAllDayAt(ctx.dateKey) },
+            { label:"Paste", icon:<PasteIcon size={14} />, disabled: !clipboardRef.current, action:()=>handlePaste(ctx.dateKey, ctx.minutes) },
+          ]},
+          { items: [
+            { label:"Go to Today", icon:<HomeIcon size={14} />, action:()=>setAnchor(new Date()) },
+            { label:"Go to Date…", icon:<CalendarMarkIcon size={14} />, action:()=>setShowDatePicker(true) },
+          ]},
+          { items: [
+            { label:"Change View — Day", icon:<EyeIcon size={14} />, action:()=>setView("day") },
+            { label:"Change View — Week", icon:<EyeIcon size={14} />, action:()=>setView("week") },
+            { label:"Change View — Book", icon:<BookIcon size={14} />, action:()=>setView("book") },
+          ]},
+        ]} />
+      )}
 
       {resetConfirmOpen && (
         <div className="ov" onMouseDown={(e) => { if (e.target === e.currentTarget) setResetConfirmOpen(false); }}>

@@ -12,6 +12,8 @@ export function MonthView({
   weekStart = "monday",
   onSelectEvent,
   onCreateAt,
+  onEventContextMenu,
+  onEmptyContextMenu,
 }: {
   anchor: Date;
   events: EventRecord[];
@@ -20,6 +22,8 @@ export function MonthView({
   weekStart?: "monday" | "sunday";
   onSelectEvent: (id: string) => void;
   onCreateAt: (dateKey: string, minutes: number) => void;
+  onEventContextMenu?: (e: React.MouseEvent, id: string) => void;
+  onEmptyContextMenu?: (e: React.MouseEvent, dateKey: string, minutes: number) => void;
 }) {
   const colorOf = (id: string) => calendars.find((c) => c.id === id)?.color ?? "var(--accent)";
 
@@ -83,12 +87,14 @@ export function MonthView({
                 className={`mcell${isOut ? " out" : ""}${isToday ? " today" : ""}`}
                 data-date={key}
                 onClick={() => onCreateAt(key, 9 * 60)}
+                onContextMenu={(e) => { e.preventDefault(); onEmptyContextMenu?.(e, key, 9*60); }}
               >
                 <span className="num">{formatInTimeZone(d, timeZone, "d")}</span>
                 {list.slice(0, 3).map((ev) => (
                   <button
                     key={ev.id}
                     onClick={(e) => { e.stopPropagation(); onSelectEvent(ev.id); }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onEventContextMenu?.(e, ev.id); }}
                     className="chip"
                     style={{ ["--c" as string]: colorOf(ev.calendarId) } as any}
                   >

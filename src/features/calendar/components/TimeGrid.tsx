@@ -22,7 +22,7 @@ function fmtMinutes(m: number, timeFormat: "12h" | "24h"): string {
 }
 
 export function TimeGrid({
-  days, events, calendars, timeZone, onSelectEvent, onCreateAt, onMoveOrResize, onSelectDay,
+  days, events, calendars, timeZone, onSelectEvent, onCreateAt, onMoveOrResize, onSelectDay, onEventContextMenu, onEmptyContextMenu,
 }: {
   days: Date[];
   events: EventRecord[];
@@ -32,6 +32,8 @@ export function TimeGrid({
   onCreateAt: (dateKey: string, minutes: number) => void;
   onMoveOrResize: (id: string, startAt: string, endAt: string) => void;
   onSelectDay?: (iso: string) => void;
+  onEventContextMenu?: (e: React.MouseEvent, id: string) => void;
+  onEmptyContextMenu?: (e: React.MouseEvent, dateKey: string, minutes: number) => void;
 }) {
   const colorOf = (calendarId: string) =>
     calendars.find((c) => c.id === calendarId)?.color ?? "var(--accent)";
@@ -116,6 +118,18 @@ export function TimeGrid({
                   const minutes = Math.max(0, Math.floor(((e.clientY - rect.top) / HOUR) * 2) * 30);
                   onCreateAt(key, minutes);
                 }}
+                onDoubleClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const minutes = Math.max(0, Math.floor(((e.clientY - rect.top) / HOUR) * 4) * 15);
+                  onCreateAt(key, minutes);
+                }}
+                onContextMenu={(e) => {
+                  if ((e.target as HTMLElement).closest(".ev")) return;
+                  e.preventDefault();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const minutes = Math.max(0, Math.floor(((e.clientY - rect.top) / HOUR) * 4) * 15);
+                  onEmptyContextMenu?.(e, key, minutes);
+                }}
               >
                 {laidOut.map(({ segment: seg, column, columnCount }) => {
                   const orig = seg.event;
@@ -141,6 +155,7 @@ export function TimeGrid({
                       }}
                       onPointerDown={(e) => onPointerDown(e, orig, "move")}
                       onClick={(e) => { e.stopPropagation(); onSelectEvent(orig.id); }}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onEventContextMenu?.(e, orig.id); }}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSelectEvent(orig.id); } }}
                     >
                       <div className="t">{orig.title}{seg.continuesAfter ? " →" : ""}</div>

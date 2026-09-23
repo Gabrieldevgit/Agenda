@@ -10,12 +10,16 @@ export function AgendaView({
   timeZone,
   onSelectEvent,
   anchor,
+  onEventContextMenu,
+  onEmptyContextMenu,
 }: {
   events: EventRecord[];
   calendars: CalendarSummary[];
   timeZone: string;
   onSelectEvent: (id: string) => void;
   anchor?: Date;
+  onEventContextMenu?: (e: React.MouseEvent, id: string) => void;
+  onEmptyContextMenu?: (e: React.MouseEvent, dateKey: string, minutes: number) => void;
 }) {
   const colorOf = (id: string) => calendars.find((c) => c.id === id)?.color ?? "var(--accent)";
 
@@ -32,7 +36,7 @@ export function AgendaView({
 
   if (grouped.length === 0)
     return (
-      <div className="agenda">
+      <div className="agenda" onContextMenu={(e) => { if (anchor) { e.preventDefault(); const k = formatInTimeZone(anchor, timeZone, "yyyy-MM-dd"); onEmptyContextMenu?.(e, k, 9*60); } }}>
         <div className="empty">
           <b>Nothing planned</b>Press C or tap Create to add an event.
         </div>
@@ -54,7 +58,7 @@ export function AgendaView({
             </div>
             <div>
               {list.map((ev) => (
-                <button key={ev.id} className="arow" data-id={ev.id} style={{ ["--c" as string]: colorOf(ev.calendarId) } as any} onClick={() => onSelectEvent(ev.id)}>
+                <button key={ev.id} className="arow" data-id={ev.id} style={{ ["--c" as string]: colorOf(ev.calendarId) } as any} onClick={() => onSelectEvent(ev.id)} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onEventContextMenu?.(e, ev.id); }}>
                   <span className="sw" />
                   <span className="tm">{ev.allDay ? "All day" : formatRange(ev.startAt, ev.endAt, timeZone)}</span>
                   <span>
