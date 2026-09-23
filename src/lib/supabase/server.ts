@@ -45,9 +45,14 @@ export async function createSupabaseServerClient() {
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (cookiesToSet: any) => {
-          for (const { name, value, options } of cookiesToSet) {
-            cookieStore.set(name, value, options);
-          }
+          // Next.js 15: cookies().set() throws in Server Components (Page).
+          // Supabase SSR docs: wrap in try/catch and let middleware handle refresh.
+          // See https://nextjs.org/docs/app/api-reference/functions/cookies#options
+          try {
+            for (const { name, value, options } of cookiesToSet) {
+              cookieStore.set(name, value, options);
+            }
+          } catch {}
         },
       },
     }
