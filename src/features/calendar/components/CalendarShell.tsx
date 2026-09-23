@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { addDays, addMonths, mondayOf, titleForView, toInstant } from "@/lib/dates/date-utils";
 import { useCalendarEvents, useEventMutations } from "../hooks/useCalendarEvents";
 import { useCalendars } from "../hooks/useCalendars";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { TimeGrid } from "./TimeGrid";
 import { MonthView } from "./MonthView";
 import { AgendaView } from "./AgendaView";
@@ -17,7 +18,7 @@ import { RealtimeClock } from "@/features/clock/components/RealtimeClock";
 import { PomodoroTimer } from "@/features/pomodoro/components/PomodoroTimer";
 import { GlobalSearch } from "./GlobalSearch";
 import { EventDialog } from "@/features/events/components/EventDialog";
-import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon } from "@/lib/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { PrintDialog } from "@/features/print/components/PrintDialog";
 import { useRealtimeEvents } from "../hooks/useRealtimeEvents";
@@ -50,6 +51,8 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [lastReset, setLastReset] = useState<{ ids: string[]; count: number } | null>(null);
 
   // Debounce search (Notebook v2 §17/39)
   useEffect(() => {
@@ -109,6 +112,54 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const rangeArgs = { workspaceId, calendarIds: visibleCalendars, rangeStart, rangeEnd, q: debouncedQ || undefined };
   const { data: events = [], isLoading, isError } = useCalendarEvents(rangeArgs);
   const { create, update, moveOrResize, remove, restore } = useEventMutations(rangeArgs);
+  const queryClient = useQueryClient();
+  const allDayCount = events.filter((e) => e.allDay).length;
+  const resetAllDay = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/events/reset-all-day", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, calendarIds: visibleCalendars }),
+      });
+      if (!res.ok) {
+        const b: any = await res.json().catch(() => null);
+        throw new Error(b?.error?.message ?? "Failed to reset all-day events");
+      }
+      return (await res.json()) as { count: number; ids: string[] };
+    },
+    onSuccess: (data) => {
+      if (!data.count) {
+        setToast({ msg: "No all-day events to reset." });
+        setTimeout(() => setToast(null), 2500);
+        return;
+      }
+      setLastReset({ ids: data.ids, count: data.count });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      setToast({ msg: `Reset ${data.count} all-day event(s).`, undoId: "bulk-all-day" });
+      setTimeout(() => setToast(null), 5000);
+    },
+    onError: (e: unknown) => {
+      setToast({ msg: e instanceof Error ? e.message : String(e) });
+      setTimeout(() => setToast(null), 4000);
+    },
+  });
+  const restoreBulk = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await fetch("/api/events/restore-many", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, ids }),
+      });
+      if (!res.ok) throw new Error("Failed to restore");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      setLastReset(null);
+      setToast({ msg: "Restored all-day events." });
+      setTimeout(() => setToast(null), 3000);
+    },
+  });
 
   function openNewEventAt(dateKey: string, minutes: number) {
     // P0 §2: invariant — never open dialog without a valid calendar
@@ -317,7 +368,18 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           />
           <UpNext events={events} calendars={calendars} timeZone={timeZone} />
           <PomodoroTimer />
-          <h2>My calendars</h2>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <h2 style={{ margin: 0 }}>My calendars</h2>
+            <button
+              className="btn ghost"
+              onClick={() => setResetConfirmOpen(true)}
+              disabled={!allDayCount || resetAllDay.isPending}
+              title={allDayCount ? `Reset ${allDayCount} all-day event(s)` : "No all-day events"}
+              style={{ height: 28, padding: "0 8px", fontSize: 11, opacity: !allDayCount ? 0.5 : 1, gap: 4 }}
+            >
+              <TrashIcon size={12} /> Reset all-day
+            </button>
+          </div>
           {calError && <p style={{ fontSize: 12, color: "var(--now)" }}>Calendars failed to load.</p>}
           {calLoading && <p style={{ fontSize: 12, color: "var(--muted)" }}>Loading calendars…</p>}
           {!calLoading && !calError && calendars.length === 0 && <p style={{ fontSize: 12, color: "var(--muted)" }}>No calendars — create your first.</p>}
@@ -407,10 +469,48 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         anchor={anchor}
       />
 
+      {resetConfirmOpen && (
+        <div className="ov" onMouseDown={(e) => { if (e.target === e.currentTarget) setResetConfirmOpen(false); }}>
+          <div className="dlg" role="dialog" aria-modal="true" aria-label="Reset all-day events">
+            <h2 style={{ margin: "0 0 8px", font: "700 18px var(--font-display)" }}>Reset all-day events?</h2>
+            <p style={{ margin: 0, color: "var(--muted)", fontSize: 14, lineHeight: 1.4 }}>
+              {allDayCount
+                ? `This will delete ${allDayCount} all-day event(s) in this workspace${visibleCalendars.length ? " (filtered calendars)" : ""}. You can undo immediately after.`
+                : "There are no all-day events to reset."}
+            </p>
+            <div className="acts" style={{ marginTop: 16 }}>
+              <span style={{ flex: 1 }} />
+              <button className="btn ghost" onClick={() => setResetConfirmOpen(false)}>Cancel</button>
+              <button
+                className="btn danger"
+                disabled={!allDayCount || resetAllDay.isPending}
+                onClick={() => {
+                  setResetConfirmOpen(false);
+                  resetAllDay.mutate();
+                }}
+              >
+                {resetAllDay.isPending ? "Resetting…" : "Reset"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div role="status" aria-live="polite" className="toast">
           <span>{toast.msg}</span>
-          {toast.undoId && <button onClick={() => { if (toast.undoId) restore.mutate(toast.undoId); setToast(null); }}>Undo</button>}
+          {toast.undoId === "bulk-all-day" && lastReset ? (
+            <button
+              onClick={() => {
+                restoreBulk.mutate(lastReset.ids);
+                setToast(null);
+              }}
+            >
+              Undo
+            </button>
+          ) : toast.undoId ? (
+            <button onClick={() => { restore.mutate(toast.undoId!); setToast(null); }}>Undo</button>
+          ) : null}
         </div>
       )}
     </div>

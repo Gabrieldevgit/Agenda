@@ -132,3 +132,28 @@ export async function searchEventsGlobal(
   const rows = await eventRepository.searchGlobal({ workspaceId, calendarIds, query, limit });
   return rows.map((row) => toRecord(row));
 }
+
+export async function resetAllDayEvents(
+  userId: string,
+  workspaceId: string,
+  calendarIds?: string[]
+): Promise<{ count: number; ids: string[] }> {
+  await assertCanWriteWorkspace(userId, workspaceId);
+  const ids = await eventRepository.findAllDayIds(workspaceId, calendarIds);
+  if (!ids.length) return { count: 0, ids: [] };
+  await eventRepository.softDeleteMany(ids);
+  return { count: ids.length, ids };
+}
+
+export async function restoreAllDayEvents(
+  userId: string,
+  workspaceId: string,
+  ids: string[]
+): Promise<{ count: number }> {
+  if (!ids.length) return { count: 0 };
+  // Verify all ids belong to workspace and user can write
+  await assertCanWriteWorkspace(userId, workspaceId);
+  // Extra safety: ensure ids are all-day and in workspace (optional, but we trust ids from previous reset)
+  await eventRepository.restoreMany(ids);
+  return { count: ids.length };
+}

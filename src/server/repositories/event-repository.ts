@@ -138,4 +138,29 @@ export const eventRepository = {
   async restore(id: string) {
     return prisma.event.update({ where: { id }, data: { deletedAt: null } });
   },
+
+  async findAllDayIds(workspaceId: string, calendarIds?: string[]): Promise<string[]> {
+    const rows = await prisma.event.findMany({
+      where: {
+        deletedAt: null,
+        allDay: true,
+        calendar: {
+          workspaceId,
+          ...(calendarIds && calendarIds.length > 0 ? { id: { in: calendarIds } } : calendarIds && calendarIds.length === 0 ? { id: { in: [] } } : {}),
+        },
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  async softDeleteMany(ids: string[]) {
+    if (!ids.length) return { count: 0 };
+    return prisma.event.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: { deletedAt: new Date() } });
+  },
+
+  async restoreMany(ids: string[]) {
+    if (!ids.length) return { count: 0 };
+    return prisma.event.updateMany({ where: { id: { in: ids } }, data: { deletedAt: null } });
+  },
 };

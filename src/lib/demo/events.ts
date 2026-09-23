@@ -126,3 +126,17 @@ export function restoreDemoStore(id: string): DemoEvent | null {
   }
   return getDemoStore().find((e) => e.id === id) ?? null;
 }
+export function resetAllDayDemo(workspaceId: string, calendarIds?: string[]): { ids: string[]; count: number } {
+  const store = getDemoStore();
+  const toDelete = store.filter((e) => e.allDay && (!calendarIds?.length || calendarIds.includes(e.calendarId)));
+  const ids = toDelete.map((e) => e.id);
+  for (const id of ids) removeFromDemoStore(id);
+  return { ids, count: ids.length };
+}
+export function restoreManyDemo(ids: string[]): number {
+  let c = 0;
+  for (const id of ids) {
+    if (restoreDemoStore(id)) c++;
+  }
+  return c;
+}
