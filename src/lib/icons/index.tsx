@@ -153,7 +153,6 @@ export const HomeIcon = (p: IconProps) => (
 export const CommandIcon = (p: IconProps) => (
   <svg {...base(p)}><rect x="5" y="5" width="14" height="14" rx="3" /><path d="M9 9h6v6H9z" /></svg>
 );
-);
 
 /** Used as the browser-tab favicon (data: URI) instead of an emoji glyph. */
 export const FAVICON_SVG_DATA_URI =
