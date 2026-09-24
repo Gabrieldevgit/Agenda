@@ -21,7 +21,7 @@ import { RealtimeClock } from "@/features/clock/components/RealtimeClock";
 import { PomodoroTimer } from "@/features/pomodoro/components/PomodoroTimer";
 import { GlobalSearch } from "./GlobalSearch";
 import { EventDialog } from "@/features/events/components/EventDialog";
-import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon, BookIcon, YearViewIcon, CommandIcon, SearchIcon, HomeIcon, CalendarMarkIcon, EditIcon, DuplicateIcon, CopyIcon, CutIcon, PasteIcon, EyeIcon } from "@/lib/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon, BookIcon, YearViewIcon, CommandIcon, SearchIcon, HomeIcon, CalendarMarkIcon, EditIcon, DuplicateIcon, CopyIcon, CutIcon, PasteIcon, EyeIcon, SparklesIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { PrintDialog } from "@/features/print/components/PrintDialog";
 import { AiChat } from "@/features/ai/components/AiChat";
@@ -481,6 +481,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           onJumpToEvent={jumpToEvent}
         />
         <button className="icon" aria-label="Command palette" title="Command palette (Ctrl+K)" onClick={() => setCommandOpen(true)}><CommandIcon size={18} /></button>
+        <button className="icon" aria-label="AI Assistant" title="AI Assistant" onClick={() => setAiChatOpen(true)} style={{ color: "var(--accent)" }}><SparklesIcon size={18} /></button>
         <div className="seg" role="group" aria-label="View">
           {([
             ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon], ["book", BookIcon], ["year", YearViewIcon], ["notebook", BookIcon],
@@ -620,6 +621,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         timeZone={timeZone}
         anchor={anchor}
       />
+      <AiChat open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
 
       {showDatePicker && (
         <div className="ov" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowDatePicker(false); }}>
