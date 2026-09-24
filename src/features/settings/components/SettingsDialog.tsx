@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { CloseIcon, SunIcon, MoonIcon, SettingsIcon, ClockIcon, BellIcon, UserIcon, LayoutIcon, GlobeIcon, LogOutIcon } from "@/lib/icons";
+import { CloseIcon, SunIcon, MoonIcon, SettingsIcon, ClockIcon, BellIcon, UserIcon, LayoutIcon, GlobeIcon, LogOutIcon, SearchIcon } from "@/lib/icons";
 import { getStoredTheme, setTheme, type Theme } from "@/lib/theme";
 import { useSettings, TIMEZONES } from "@/lib/settings";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { CalendarSummary } from "@/features/calendar/types";
 
-type Tab = "appearance" | "calendar" | "notifications" | "account";
+type Tab = "appearance" | "calendar" | "notifications" | "ai" | "account";
 
 export function SettingsDialog({ open, onClose, calendars }: { open: boolean; onClose: () => void; calendars?: CalendarSummary[] }) {
   const [theme, setThemeState] = useState<Theme>("system");
@@ -42,6 +42,7 @@ export function SettingsDialog({ open, onClose, calendars }: { open: boolean; on
             ["appearance", "Appearance", LayoutIcon],
             ["calendar", "Calendar", ClockIcon],
             ["notifications", "Notifications", BellIcon],
+            ["ai", "AI Assistant", SearchIcon],
             ["account", "Account", UserIcon],
           ] as const).map(([v, label, Icon]) => (
             <button
@@ -204,6 +205,104 @@ export function SettingsDialog({ open, onClose, calendars }: { open: boolean; on
               </label>
               <div style={{ fontSize: 12, color: "var(--muted)", background: "color-mix(in srgb, var(--accent) 8%, var(--surface))", border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
                 Reminders run in the background (future: `Reminder` → queue → email/push). Toggle here controls your preference; delivery is server-side.
+              </div>
+            </div>
+          )}
+
+          {tab === "ai" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px", background: settings.aiEnabled ? "color-mix(in srgb, var(--accent) 12%, var(--surface))" : "var(--hover)", border: `1px solid ${settings.aiEnabled ? "var(--accent)" : "var(--line)"}`, borderRadius: 12, cursor: "pointer" }}>
+                <input type="checkbox" checked={settings.aiEnabled} onChange={(e) => update({ aiEnabled: e.target.checked })} />
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>Enable AI Assistant</span>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>Let AI help create events, labels and manage your calendar</span>
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: settings.aiEnabled ? "var(--accent)" : "var(--muted)", background: "var(--surface)", padding: "4px 8px", borderRadius: 20, border: "1px solid var(--line)" }}>{settings.aiEnabled ? "On" : "Off"}</span>
+              </label>
+
+              <div style={{ opacity: settings.aiEnabled ? 1 : 0.5, pointerEvents: settings.aiEnabled ? "auto" : "none" }}>
+                <label style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)", display: "block", marginBottom: 6 }}>Provider</label>
+                <div className="picks" style={{ gap: 8 }}>
+                  {(["groq", "openrouter", "custom"] as const).map((p) => (
+                    <button key={p} className="pick" role="radio" aria-checked={settings.aiProvider === p} onClick={() => update({ aiProvider: p })} style={{ flex: 1, justifyContent: "center" }}>
+                      {p === "groq" ? "Groq (free)" : p === "openrouter" ? "OpenRouter" : "Custom"}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+                  <div>
+                    <label style={{ fontWeight: 700, fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>Model</label>
+                    <input
+                      value={settings.aiModel}
+                      onChange={(e) => update({ aiModel: e.target.value })}
+                      placeholder="llama-3.1-8b-instant"
+                      list="ai-models"
+                      style={{ width: "100%", height: 38, borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", padding: "0 10px", fontWeight: 600, fontSize: 13 }}
+                    />
+                    <datalist id="ai-models">
+                      <option value="llama-3.1-8b-instant" />
+                      <option value="llama-3.2-11b-vision-preview" />
+                      <option value="llama-3.2-90b-vision-preview" />
+                      <option value="openai/gpt-4o-mini" />
+                    </datalist>
+                  </div>
+                  <div>
+                    <label style={{ fontWeight: 700, fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>Key Prefix (from .env)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, height: 38, borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg)", padding: "0 10px" }}>
+                      <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)", background: "var(--hover)", padding: "2px 6px", borderRadius: 6, whiteSpace: "nowrap" }}>{settings.aiKeyPrefix || "gsk_"}</span>
+                      <input
+                        value={settings.aiKeyPrefix}
+                        onChange={(e) => update({ aiKeyPrefix: e.target.value })}
+                        placeholder="gsk_"
+                        title="Prefix shown before API key (from NEXT_PUBLIC_GROQ_KEY_PREFIX)"
+                        style={{ flex: 1, border: 0, background: "transparent", color: "var(--ink)", fontFamily: "monospace", fontSize: 12, outline: "none" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ fontWeight: 700, fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>API Key</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 0, height: 38, borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg)", overflow: "hidden" }}>
+                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 12%, var(--surface))", padding: "0 10px", height: "100%", display: "grid", placeItems: "center", borderRight: "1px solid var(--line)", whiteSpace: "nowrap" }}>{settings.aiKeyPrefix || "gsk_"}</span>
+                    <input
+                      type="password"
+                      value={settings.aiApiKey}
+                      onChange={(e) => update({ aiApiKey: e.target.value })}
+                      placeholder="••••••••••••••••"
+                      style={{ flex: 1, border: 0, background: "transparent", color: "var(--ink)", padding: "0 10px", fontWeight: 600, fontSize: 13, outline: "none" }}
+                    />
+                  </div>
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--muted)" }}>Full key = <code style={{ background: "var(--hover)", padding: "2px 6px", borderRadius: 6 }}>{(settings.aiKeyPrefix || "gsk_") + (settings.aiApiKey ? "••••" : "")}</code> — stored locally, never committed. Set <code style={{ background: "var(--hover)", padding: "2px 6px", borderRadius: 6 }}>GROQ_API_KEY</code> in <code style={{ background: "var(--hover)", padding: "2px 6px", borderRadius: 6 }}>.env</code> for server proxy.</p>
+                </div>
+
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)", marginBottom: 6 }}>Permissions — what AI can do</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {([
+                      ["canRead", "Read calendars & events"],
+                      ["canCreateEvents", "Create events"],
+                      ["canEditEvents", "Edit events"],
+                      ["canDeleteEvents", "Delete events"],
+                      ["canCreateCalendars", "Create calendars / labels"],
+                      ["canManageCalendars", "Manage calendars"],
+                    ] as const).map(([k, label]) => (
+                      <label key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "var(--hover)", borderRadius: 8, cursor: "pointer" }}>
+                        <input type="checkbox" checked={(settings.aiPermissions as any)[k]} onChange={(e) => update({ aiPermissions: { ...settings.aiPermissions, [k]: e.target.checked } })} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: settings.aiVisionEnabled ? "color-mix(in srgb, var(--accent) 10%, var(--surface))" : "var(--hover)", border: `1px solid ${settings.aiVisionEnabled ? "var(--accent)" : "var(--line)"}`, borderRadius: 10, cursor: "pointer", marginTop: 12 }}>
+                  <input type="checkbox" checked={settings.aiVisionEnabled} onChange={(e) => update({ aiVisionEnabled: e.target.checked })} />
+                  <span style={{ flex: 1 }}>
+                    <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>Vision — image attachments</span>
+                    <span style={{ fontSize: 11, color: "var(--muted)" }}>Allow images (PNG/JPG/WebP, max 5MB) for vision models like <code>llama-3.2-11b-vision-preview</code></span>
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: settings.aiVisionEnabled ? "var(--accent)" : "var(--muted)" }}>{settings.aiVisionEnabled ? "On" : "Off"}</span>
+                </label>
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--muted)" }}>Attachments are sent as base64 to the provider only if the model supports vision. Files stay local until sent.</p>
               </div>
             </div>
           )}

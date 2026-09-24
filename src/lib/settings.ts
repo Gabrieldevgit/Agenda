@@ -3,6 +3,16 @@ import { useEffect, useState } from "react";
 export type WeekStart = "monday" | "sunday";
 export type TimeFormat = "12h" | "24h";
 
+export type AiProvider = "groq" | "openrouter" | "custom";
+export interface AiPermissions {
+  canRead: boolean;
+  canCreateEvents: boolean;
+  canEditEvents: boolean;
+  canDeleteEvents: boolean;
+  canCreateCalendars: boolean;
+  canManageCalendars: boolean;
+}
+
 export interface UserSettings {
   timezone: string;
   weekStart: WeekStart;
@@ -14,9 +24,19 @@ export interface UserSettings {
   emailNotifications: boolean;
   pushNotifications: boolean;
   density: "comfortable" | "compact";
+  // AI
+  aiEnabled: boolean;
+  aiProvider: AiProvider;
+  aiModel: string;
+  aiApiKey: string; // stored locally, full key without prefix
+  aiKeyPrefix: string; // shown before input, from env or user
+  aiPermissions: AiPermissions;
+  aiVisionEnabled: boolean; // allow image attachments
 }
 
 const KEY = "tempo-settings";
+
+const ENV_PREFIX = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_GROQ_KEY_PREFIX || process.env.NEXT_PUBLIC_AI_KEY_PREFIX || "gsk_") : "gsk_";
 
 const DEFAULTS: UserSettings = {
   timezone: "America/Toronto",
@@ -29,6 +49,20 @@ const DEFAULTS: UserSettings = {
   emailNotifications: true,
   pushNotifications: false,
   density: "comfortable",
+  aiEnabled: false,
+  aiProvider: "groq",
+  aiModel: "llama-3.1-8b-instant",
+  aiApiKey: "",
+  aiKeyPrefix: ENV_PREFIX,
+  aiPermissions: {
+    canRead: true,
+    canCreateEvents: true,
+    canEditEvents: true,
+    canDeleteEvents: false,
+    canCreateCalendars: true,
+    canManageCalendars: false,
+  },
+  aiVisionEnabled: true,
 };
 
 export function getSettings(): UserSettings {

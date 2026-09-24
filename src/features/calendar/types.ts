@@ -11,6 +11,8 @@ export interface CalendarSummary {
   isArchived: boolean;
 }
 
+export type EventStatus = "confirmed" | "tentative" | "cancelled";
+
 export interface EventRecord {
   id: string;
   calendarId: string;
@@ -22,7 +24,11 @@ export interface EventRecord {
   endAt: string;
   timezone: string;
   allDay: boolean;
-  status: "confirmed" | "tentative" | "cancelled";
+  status: EventStatus;
+  /** Free‑form tags / categories for organizing events */
+  labels: string[];
+  /** Numeric priority: 1 = low, 2 = medium (default), 3 = high */
+  priority?: number;
 }
 
 export interface EventDraft {
@@ -35,6 +41,10 @@ export interface EventDraft {
   endAt: string;
   timezone: string;
   allDay: boolean;
+  /** Free‑form tags / categories for organizing events */
+  labels?: string[];
+  /** Numeric priority: 1 = low, 2 = medium (default), 3 = high */
+  priority?: number;
 }
 
 /** Result of the overlap-layout algorithm for one day's non-all-day events. */

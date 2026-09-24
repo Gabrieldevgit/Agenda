@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon, TrashIcon } from "@/lib/icons";
-import type { CalendarSummary, EventDraft } from "@/features/calendar/types";
+import type { CalendarSummary, EventDraft, EventStatus } from "@/features/calendar/types";
 import { dayKey, toInstant } from "@/lib/dates/date-utils";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -10,6 +10,34 @@ function toDateInput(iso: string, tz: string): string {
 }
 function toTimeInput(iso: string, tz: string): string {
   try { return formatInTimeZone(new Date(iso), tz, "HH:mm"); } catch { return "09:00"; }
+}
+
+function LabelTag({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span
+      className="label-tag"
+      role="button"
+      aria-label={`Remove label: ${label}`}
+      onClick={onRemove}
+    >
+      {label}
+      <svg
+        width={12}
+        height={12}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+      >
+        <path d="M18 6L6 18M6 6l12 12" />
+      </svg>
+    </span>
+  );
+}
+
+function priorityClass(p: number) {
+  return p === 1 ? "priority-low" : p === 2 ? "priority-medium" : "priority-high";
 }
 
 export function EventDialog({
@@ -28,6 +56,7 @@ export function EventDialog({
   const [form, setForm] = useState<EventDraft | null>(draft);
   const [error, setError] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
+  const [newLabel, setNewLabel] = useState("");  // <-- added separate state for new label input
 
   useEffect(() => { setForm(draft); setError(""); }, [draft]);
   useEffect(() => { if (open) titleRef.current?.focus(); }, [open]);
@@ -52,13 +81,19 @@ export function EventDialog({
       setError("End time must be after the start time.");
       return;
     }
-    onSave({ ...form, title: form.title.trim() || "(No title)" });
+    // Merge new label into labels array if provided
+    const labels = newLabel ? [...(form.labels ?? []), newLabel] : (form.labels ?? []);
+    onSave({ ...form, title: form.title.trim() || "(No title)", labels });
   }
 
   const startDate = toDateInput(form.startAt, form.timezone);
   const startTime = toTimeInput(form.startAt, form.timezone);
   const endDate = toDateInput(form.endAt, form.timezone);
   const endTime = toTimeInput(form.endAt, form.timezone);
+
+  // initialise labels/priority from draft if present
+  const initialLabels = form.labels ?? [];
+  const initialPriority = form.priority ?? 2;
 
   return (
     <div className="ov" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -101,7 +136,6 @@ export function EventDialog({
             onChange={(e) => {
               const v = e.target.value;
               setDateTime("startAt", v, startTime);
-              // Keep end on same civil day if it was same before.
               if (startDate === endDate) setDateTime("endAt", v, endTime);
             }}
           />
@@ -139,6 +173,64 @@ export function EventDialog({
         <div className="fld">
           <span className="k">Notes</span>
           <textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Add notes" />
+        </div>
+
+        {/* Labels / Tags section */}
+        <div className="fld">
+          <span className="k">Labels</span>
+          <div className="picks" role="group" aria-label="Labels">
+            {/* Pre-existing labels chips */}
+            {initialLabels.map((lbl) => (
+              <LabelTag
+                key={lbl}
+                label={lbl}
+                onRemove={() => set("labels", initialLabels.filter((l) => l !== lbl))}
+              />
+            ))}
+            {/* Add new label input */}
+            <input
+              type="text"
+              className="new-label"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Add a label..."
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+
+        {/* Priority section */}
+        <div className="fld">
+          <span className="k">Priority</span>
+          <div className="picks" role="radiogroup" aria-label="Priority">
+            <label
+              key="1"
+              className={`priority-radio ${initialPriority === 1 ? "active" : ""}`}
+              role="radio"
+              aria-checked={initialPriority === 1}
+              onClick={() => set("priority", 1)}
+            >
+              Low
+            </label>
+            <label
+              key="2"
+              className={`priority-radio ${initialPriority === 2 ? "active" : ""}`}
+              role="radio"
+              aria-checked={initialPriority === 2}
+              onClick={() => set("priority", 2)}
+            >
+              Medium
+            </label>
+            <label
+              key="3"
+              className={`priority-radio ${initialPriority === 3 ? "active" : ""}`}
+              role="radio"
+              aria-checked={initialPriority === 3}
+              onClick={() => set("priority", 3)}
+            >
+              High
+            </label>
+          </div>
         </div>
 
         {error && <p className="err" role="alert">{error}</p>}

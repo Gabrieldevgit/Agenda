@@ -10,6 +10,7 @@ function ev(id: string, startHour: number, endHour: number): EventRecord {
     startAt: new Date(`${day}T${String(startHour).padStart(2, "0")}:00:00-04:00`).toISOString(),
     endAt: new Date(`${day}T${String(endHour).padStart(2, "0")}:00:00-04:00`).toISOString(),
     timezone: TZ, allDay: false, status: "confirmed",
+    labels: [], priority: 2,
   };
 }
 

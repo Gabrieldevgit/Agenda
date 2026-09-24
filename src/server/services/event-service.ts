@@ -40,6 +40,8 @@ function toRecord(row: EventRow | EventWithCalendarRow | null): EventRecord {
     timezone: row.timezone,
     allDay: row.allDay,
     status: row.status as EventRecord["status"],
+    labels: (row as any).labels ?? [],
+    priority: (row as any).priority ?? 2,
   };
 }
 

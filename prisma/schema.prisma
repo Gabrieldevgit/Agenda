@@ -114,6 +114,11 @@ model Event {
   updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz(3) // soft delete, powers Undo
 
+  /** Free‑form tags / categories for organizing events */
+  labels          String[]    @default([]) @map("labels")
+  /** Numeric priority: 1 = low, 2 = medium (default), 3 = high */
+  priority         Int         @default(2) @map("priority")
+
   calendar        Calendar         @relation(fields: [calendarId], references: [id], onDelete: Cascade)
   createdBy       UserProfile      @relation("EventCreator", fields: [createdById], references: [id])
   recurrenceRule  RecurrenceRule?

@@ -24,6 +24,7 @@ import { EventDialog } from "@/features/events/components/EventDialog";
 import { ChevronLeftIcon, ChevronRightIcon, DayViewIcon, WeekViewIcon, MonthViewIcon, AgendaViewIcon, PlusIcon, MenuIcon, SettingsIcon, PrintIcon, TrashIcon, BookIcon, YearViewIcon, CommandIcon, SearchIcon, HomeIcon, CalendarMarkIcon, EditIcon, DuplicateIcon, CopyIcon, CutIcon, PasteIcon, EyeIcon } from "@/lib/icons";
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { PrintDialog } from "@/features/print/components/PrintDialog";
+import { AiChat } from "@/features/ai/components/AiChat";
 import { ContextMenu } from "./ContextMenu";
 import { CommandPalette, type Command } from "./CommandPalette";
 import { NotebookView } from "@/features/notebook/components/NotebookView";
@@ -62,6 +63,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   const [lastReset, setLastReset] = useState<{ ids: string[]; count: number } | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [aiChatOpen, setAiChatOpen] = useState(false);
   const [ctx, setCtx] = useState<null | { x: number; y: number; kind: "event"; eventId: string } | { x: number; y: number; kind: "empty"; dateKey: string; minutes: number }>(null);
   const clipboardRef = useRef<EventRecord | null>(null);
   const [cutId, setCutId] = useState<string | null>(null);

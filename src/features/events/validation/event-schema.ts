@@ -13,6 +13,10 @@ const eventInputBase = z.object({
   endAt: z.string().datetime(),
   timezone: z.string().min(1),
   allDay: z.boolean().default(false),
+  /** Free‑form tags / categories for organizing events */
+  labels: z.array(z.string()).default([]),
+  /** Numeric priority: 1 = low, 2 = medium (default), 3 = high */
+  priority: z.number().int().min(1).max(3).default(2),
 });
 
 export const eventInputSchema = eventInputBase
