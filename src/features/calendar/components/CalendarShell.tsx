@@ -30,6 +30,7 @@ import { ContextMenu } from "./ContextMenu";
 import { CommandPalette, type Command } from "./CommandPalette";
 import { NotebookView } from "@/features/notebook/components/NotebookView";
 import { useRealtimeEvents } from "../hooks/useRealtimeEvents";
+import { useReminderNotifier } from "@/features/notifications/hooks/useReminderNotifier";
 import { useSettings } from "@/lib/settings";
 import type { CalendarSummary, CalendarView, EventDraft, EventRecord } from "../types";
 import { dayKey } from "@/lib/dates/date-utils";
@@ -251,6 +252,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
   }
 
   useRealtimeEvents({ workspaceId, calendarIds: calendars.map((c) => c.id) });
+  useReminderNotifier(events, workspaceId);
 
   function handleSave(draft: EventDraft) {
     setDialogError("");
