@@ -1,15 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useAppI18n } from "@/lib/i18n";
 
 type Mode = "work" | "shortBreak" | "longBreak";
 
-const PRESETS: Record<Mode, { label: string; minutes: number; color: string }> = {
+const PRESET_MINUTES: Record<Mode, number> = { work: 25, shortBreak: 5, longBreak: 15 };\n\nfunction usePomodoroPresets() {\n  const { t } = useAppI18n();\n  return {\n    work: { label: t("focus"), minutes: PRESET_MINUTES.work, color: "var(--accent)" },\n    shortBreak: { label: t("break"), minutes: PRESET_MINUTES.shortBreak, color: "var(--health)" },\n    longBreak: { label: t("longBreak"), minutes: PRESET_MINUTES.longBreak, color: "var(--personal)" },\n  } as const;\n}\n\nconst PRESETS_FALLBACK: Record<Mode, { label: string; minutes: number; color: string }> = {
   work: { label: "Focus", minutes: 25, color: "var(--accent)" },
   shortBreak: { label: "Break", minutes: 5, color: "var(--health)" },
   longBreak: { label: "Long Break", minutes: 15, color: "var(--personal)" },
 };
 
 export function PomodoroTimer() {
+  const { t } = useAppI18n();
+  const PRESETS: Record<Mode, { label: string; minutes: number; color: string }> = usePomodoroPresets();
   const [mode, setMode] = useState<Mode>("work");
   const [custom, setCustom] = useState<Record<Mode, number>>({
     work: 25,
@@ -84,7 +87,7 @@ export function PomodoroTimer() {
           Pomodoro
         </span>
         <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", background: "var(--hover)", padding: "4px 8px", borderRadius: 20 }}>
-          {completed} done
+          {completed} {t("done")}
         </span>
       </div>
 
@@ -118,7 +121,7 @@ export function PomodoroTimer() {
           <div style={{ width: `${progress * 100}%`, height: "100%", background: PRESETS[mode].color, transition: "width 1s linear" }} />
         </div>
         <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6, fontWeight: 600 }}>
-          {PRESETS[mode].label} · {custom[mode]} min
+          {PRESETS[mode].label} · {custom[mode]} {t("minutesShort")}
         </div>
       </div>
 
@@ -128,7 +131,7 @@ export function PomodoroTimer() {
           className="btn primary"
           style={{ flex: 1, justifyContent: "center", height: 36, borderRadius: 12 }}
         >
-          {isRunning ? "Pause" : "Start"}
+          {isRunning ? t("pause") : t("start")}
         </button>
         <button
           onClick={() => { setIsRunning(false); setSecondsLeft(custom[mode] * 60); }}
@@ -147,14 +150,14 @@ export function PomodoroTimer() {
           }}
           className="btn ghost"
           style={{ height: 36, borderRadius: 12 }}
-          title="Skip"
+          title={t("skip")}
         >
           Skip
         </button>
       </div>
 
       <details style={{ marginTop: 10 }}>
-        <summary style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", cursor: "pointer", listStyle: "none" }}>Customize</summary>
+        <summary style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", cursor: "pointer", listStyle: "none" }}>{t("customize")}</summary>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
           {(["work", "shortBreak", "longBreak"] as Mode[]).map((k) => (
             <label key={k} style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>
