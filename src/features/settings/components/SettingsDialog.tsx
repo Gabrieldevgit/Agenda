@@ -36,7 +36,7 @@ export function SettingsDialog({ open, onClose, calendars }: { open: boolean; on
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 20px 14px", borderBottom: "1px solid var(--line)", flex: "none" }}>
           <SettingsIcon size={20} />
           <h2 style={{ margin: 0, font: "700 18px var(--font-display)", flex: 1 }}>{t("settings")}</h2>
-          <button className="icon" aria-label="Close" onClick={onClose}><CloseIcon /></button>
+          <button className="icon" aria-label={t("close")} onClick={onClose}><CloseIcon /></button>
         </div>
 
         <div style={{ display: "flex", gap: 6, padding: "12px 16px", borderBottom: "1px solid var(--line)", overflowX: "auto", flex: "none" }}>
@@ -125,7 +125,7 @@ export function SettingsDialog({ open, onClose, calendars }: { open: boolean; on
                 >
                   {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
                 </select>
-                <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--muted)" }}>{t("timezone")} {t("signedInViaSupabase").split(".")[0].toLowerCase()}.</p>
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--muted)" }}>{t("timezoneBody")}</p>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -206,7 +206,7 @@ export function SettingsDialog({ open, onClose, calendars }: { open: boolean; on
                 </span>
               </label>
               <div style={{ fontSize: 12, color: "var(--muted)", background: "color-mix(in srgb, var(--accent) 8%, var(--surface))", border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
-                Reminders run in the background (future: `Reminder` → queue → email/push). Toggle here controls your preference; delivery is server-side.
+                {t("remindersBackground")}
               </div>
             </div>
           )}
@@ -300,9 +300,9 @@ export function SettingsDialog({ open, onClose, calendars }: { open: boolean; on
                   <input type="checkbox" checked={settings.aiVisionEnabled} onChange={(e) => update({ aiVisionEnabled: e.target.checked })} />
                   <span style={{ flex: 1 }}>
                     <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>{t("visionAttachments")}</span>
-                    <span style={{ fontSize: 11, color: "var(--muted)" }}>Allow images (PNG/JPG/WebP, max 5MB) for vision models like <code>llama-3.2-11b-vision-preview</code></span>
+                    <span style={{ fontSize: 11, color: "var(--muted)" }}>{t("visionBody")} <code>llama-3.2-11b-vision-preview</code></span>
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: settings.aiVisionEnabled ? "var(--accent)" : "var(--muted)" }}>{settings.aiVisionEnabled ? "On" : "Off"}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: settings.aiVisionEnabled ? "var(--accent)" : "var(--muted)" }}>{settings.aiVisionEnabled ? t("on") : t("off")}</span>
                 </label>
                 <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--muted)" }}>{t("attachmentsLocal")}</p>
               </div>
