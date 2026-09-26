@@ -4,11 +4,18 @@ import { useAppI18n } from "@/lib/i18n";
 
 type Mode = "work" | "shortBreak" | "longBreak";
 
-const PRESET_MINUTES: Record<Mode, number> = { work: 25, shortBreak: 5, longBreak: 15 };\n\nfunction usePomodoroPresets() {\n  const { t } = useAppI18n();\n  return {\n    work: { label: t("focus"), minutes: PRESET_MINUTES.work, color: "var(--accent)" },\n    shortBreak: { label: t("break"), minutes: PRESET_MINUTES.shortBreak, color: "var(--health)" },\n    longBreak: { label: t("longBreak"), minutes: PRESET_MINUTES.longBreak, color: "var(--personal)" },\n  } as const;\n}\n\nconst PRESETS_FALLBACK: Record<Mode, { label: string; minutes: number; color: string }> = {
-  work: { label: "Focus", minutes: 25, color: "var(--accent)" },
-  shortBreak: { label: "Break", minutes: 5, color: "var(--health)" },
-  longBreak: { label: "Long Break", minutes: 15, color: "var(--personal)" },
-};
+const PRESET_MINUTES: Record<Mode, number> = { work: 25, shortBreak: 5, longBreak: 15 };
+
+function usePomodoroPresets() {
+  const { t } = useAppI18n();
+  return {
+    work: { label: t("focus"), minutes: PRESET_MINUTES.work, color: "var(--accent)" },
+    shortBreak: { label: t("break"), minutes: PRESET_MINUTES.shortBreak, color: "var(--health)" },
+    longBreak: { label: t("longBreak"), minutes: PRESET_MINUTES.longBreak, color: "var(--personal)" },
+  } as const;
+}
+
+
 
 export function PomodoroTimer() {
   const { t } = useAppI18n();
