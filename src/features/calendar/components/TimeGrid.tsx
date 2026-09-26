@@ -103,7 +103,11 @@ export function TimeGrid({
         <div className="tg-body" ref={gridRef as any} style={{ height: HOUR * 24 }}>
           <div className="gutter">
             {Array.from({ length: 23 }, (_, i) => i + 1).map((h) => (
-              <span key={h} style={{ top: h * HOUR }}>{settings.timeFormat === "24h" ? settings.timeFormat === "24h" ? `${String(h).padStart(2, "0")}:00` : new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(2024, 0, 1, h, 0))}</span>
+              <span key={h} style={{ top: h * HOUR }}>
+                {settings.timeFormat === "24h"
+                  ? `${String(h).padStart(2, "0")}:00`
+                  : new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(2024, 0, 1, h, 0))}
+              </span>
             ))}
           </div>
           {days.map((d) => {
