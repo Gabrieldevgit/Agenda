@@ -199,7 +199,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
     const preferred = settings.defaultCalendarId && calendars.some((c) => c.id === settings.defaultCalendarId) ? settings.defaultCalendarId : null;
     const targetCal = preferred ?? visibleCalendars[0] ?? calendars[0]?.id;
     if (!targetCal) {
-      setToast({ msg: "Create a calendar first — then add events." });
+      setToast({ msg: t("createCalendarFirst") });
       setTimeout(() => setToast(null), 3000);
       return;
     }
@@ -495,7 +495,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           {([
             ["day", DayViewIcon], ["week", WeekViewIcon], ["month", MonthViewIcon], ["agenda", AgendaViewIcon], ["book", BookIcon], ["year", YearViewIcon], ["notebook", BookIcon],
           ] as const).map(([v, Icon]) => (
-            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as CalendarView)} title={v}>
+            <button key={v} data-view={v} aria-pressed={view === v} onClick={() => setView(v as CalendarView)} title={t(v)}>
               <Icon size={14} /> {t(v)}
             </button>
           ))}
@@ -510,7 +510,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
       </header>
 
       <div className="body">
-        <aside className={`side${sidebarOpen ? " open" : ""}`} id="side" aria-label="Sidebar">
+        <aside className={`side${sidebarOpen ? " open" : ""}`} id="side" aria-label={t("toggleSidebar")}>
           <button className="create" onClick={() => { setSidebarOpen(false); openNewEventAt(createDateKey, 9 * 60); }} disabled={!calendars.length} title={!calendars.length ? t("createEventFirst") : undefined} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={20} />{t("create")}</button>
           <RealtimeClock timeZone={effectiveTimeZone} />
           <MiniCalendar
@@ -601,7 +601,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
         </main>
       </div>
 
-      <nav className="tabs" id="tabs" aria-label="Views">
+      <nav className="tabs" id="tabs" aria-label={t("view")}>
         {(["day", "week", "month", "agenda", "book", "year", "notebook"] as const).map((v) => {
           const Icon = v === "day" ? DayViewIcon : v === "week" ? WeekViewIcon : v === "month" ? MonthViewIcon : v === "agenda" ? AgendaViewIcon : v === "book" ? BookIcon : v === "year" ? YearViewIcon : BookIcon;
           return (
@@ -611,7 +611,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
           );
         })}
       </nav>
-      <button className="fab" id="fab" aria-label={t("createEventFirst")} onClick={() => openNewEventAt(createDateKey, 9 * 60)} disabled={!calendars.length} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={22} /></button>
+      <button className="fab" id="fab" aria-label={t("createEvent")} onClick={() => openNewEventAt(createDateKey, 9 * 60)} disabled={!calendars.length} style={{ opacity: !calendars.length ? 0.5 : 1 }}><PlusIcon size={22} /></button>
 
       <EventDialog
         open={dialogDraft !== null}
@@ -675,7 +675,7 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
               { label:t("moveToTomorrow"), icon:<CalendarMarkIcon size={14} />, action:()=>handleMoveTo(ctx.eventId, tomorrowKey) },
               { label:t("moveToNextMonday"), icon:<CalendarMarkIcon size={14} />, action:()=>handleMoveTo(ctx.eventId, nextMonKey) },
               { label:t("moveToDate"), icon:<CalendarMarkIcon size={14} />, action:()=>{ setShowDatePicker(true);
-                setToast({msg:"Pick a date in the title Jump picker, then right-click Move again."}); setTimeout(()=>setToast(null),3000);
+                setToast({msg:t("moveDateHint")}); setTimeout(()=>setToast(null),3000);
               } },
             ]},
             { items: [
@@ -713,11 +713,11 @@ function CalendarShellInner({ workspaceId, timeZone }: { workspaceId: string; ti
 
       {resetConfirmOpen && (
         <div className="ov" onMouseDown={(e) => { if (e.target === e.currentTarget) setResetConfirmOpen(false); }}>
-          <div className="dlg" role="dialog" aria-modal="true" aria-label="{t("resetAllDay")} events">
-            <h2 style={{ margin: "0 0 8px", font: "700 18px var(--font-display)" }}>{t("resetAllDay")} events?</h2>
+          <div className="dlg" role="dialog" aria-modal="true" aria-label={t("resetAllDayEvents")}>
+            <h2 style={{ margin: "0 0 8px", font: "700 18px var(--font-display)" }}>{t("resetAllDayEventsQuestion")}</h2>
             <p style={{ margin: 0, color: "var(--muted)", fontSize: 14, lineHeight: 1.4 }}>
               {allDayCount
-                ? `This will delete ${allDayCount} all-day event(s) in this workspace${visibleCalendars.length ? " (filtered calendars)" : ""}. You can undo immediately after.`
+                ? t("resetDescription", { count: allDayCount, suffix: visibleCalendars.length ? " (filtered calendars)" : "" })
                 : t("noEventsToReset")}
             </p>
             <div className="acts" style={{ marginTop: 16 }}>
