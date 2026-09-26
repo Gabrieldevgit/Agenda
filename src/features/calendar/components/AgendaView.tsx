@@ -55,7 +55,7 @@ export function AgendaView({
             <div>
               <div className="dnum">{d.getDate()}</div>
               <div className="dwk">
-                {new Intl.DateTimeFormat(locale, { timeZone, weekday: "short", month: "short" }).format(d)
+                {new Intl.DateTimeFormat(locale, { timeZone, weekday: "short", month: "short" }).format(d)}
               </div>
             </div>
             <div>
