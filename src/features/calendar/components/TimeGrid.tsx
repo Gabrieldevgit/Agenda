@@ -11,6 +11,7 @@ import type { CalendarSummary, EventRecord } from "../types";
 import { useEventDrag } from "../hooks/useEventDrag";
 import { formatInTimeZone } from "date-fns-tz";
 import { useSettings } from "@/lib/settings";
+import { useAppI18n } from "@/lib/i18n";
 
 const HOUR = 56;
 function fmtMinutes(m: number, timeFormat: "12h" | "24h"): string {
@@ -62,6 +63,7 @@ export function TimeGrid({
 
   const { onPointerDown } = useEventDrag({ timeZone, hourHeight: HOUR, days, onMoveOrResize, gridRef: gridRef as any });
   const { settings } = useSettings();
+  const { locale, t } = useAppI18n();
 
   const today = dayKey(new Date().toISOString(), timeZone);
   const nowMinutes = minutesOfDay(new Date().toISOString(), timeZone);
@@ -75,14 +77,14 @@ export function TimeGrid({
             const key = dayKey(d.toISOString(), timeZone);
             return (
               <button key={key} className={`dh${key === today ? " today" : ""}`} onClick={() => onSelectDay?.(key)} data-goto={key}>
-                <span>{formatInTimeZone(d, timeZone, "EEE")}</span>
+                <span>{new Intl.DateTimeFormat(locale, { timeZone, weekday: "short" }).format(d)}</span>
                 <span className="dd">{formatInTimeZone(d, timeZone, "d")}</span>
               </button>
             );
           })}
         </div>
         <div className="tg-all">
-          <div className="lbl">All day</div>
+          <div className="lbl">{t("allDay")}</div>
           {days.map((d) => {
             const key = dayKey(d.toISOString(), timeZone);
             const list = allDayMap.get(key) ?? [];
@@ -144,7 +146,7 @@ export function TimeGrid({
                       className="ev"
                       role="button"
                       tabIndex={0}
-                      aria-label={`${orig.title} ${range}${seg.continuesBefore ? " (continues)" : ""}`}
+                      aria-label={`${orig.title} ${range}${seg.continuesBefore ? ` (${t("eventContinues")})` : ""}`}
                       style={{
                         top: (start * HOUR) / 60,
                         height: h,
