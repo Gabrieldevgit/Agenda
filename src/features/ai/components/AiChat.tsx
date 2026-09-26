@@ -155,7 +155,7 @@ export function AiChat({ open, onClose }: { open: boolean; onClose: () => void }
           </button>
         </div>
         <div style={{ padding: "0 12px 10px", fontSize: 11, color: "var(--muted)", textAlign: "center" }}>
-          {t("prefixShown")} <code style={{ background: "var(--hover)", padding: "2px 6px", borderRadius: 6 }}>{settings.aiKeyPrefix || "gsk_"}</code> shown before key in Settings. Images only for vision models.
+          {t("prefixShown")} <code style={{ background: "var(--hover)", padding: "2px 6px", borderRadius: 6 }}>{settings.aiKeyPrefix || "gsk_"}</code> {t("aiFooter")}
         </div>
       </div>
     </div>
