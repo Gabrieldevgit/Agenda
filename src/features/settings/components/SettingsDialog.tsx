@@ -281,12 +281,12 @@ export function SettingsDialog({ open, onClose, calendars }: { open: boolean; on
                   <div style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)", marginBottom: 6 }}>{t("permissions")}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {([
-                      ["canRead", "Read calendars & events"],
-                      ["canCreateEvents", "Create events"],
-                      ["canEditEvents", "Edit events"],
-                      ["canDeleteEvents", "Delete events"],
-                      ["canCreateCalendars", "Create calendars / labels"],
-                      ["canManageCalendars", "Manage calendars"],
+                      ["canRead", t("readCalendars")],
+                      ["canCreateEvents", t("createEvents")],
+                      ["canEditEvents", t("editEvents")],
+                      ["canDeleteEvents", t("deleteEvents")],
+                      ["canCreateCalendars", t("createCalendars")],
+                      ["canManageCalendars", t("manageCalendars")],
                     ] as const).map(([k, label]) => (
                       <label key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "var(--hover)", borderRadius: 8, cursor: "pointer" }}>
                         <input type="checkbox" checked={(settings.aiPermissions as any)[k]} onChange={(e) => update({ aiPermissions: { ...settings.aiPermissions, [k]: e.target.checked } })} />
