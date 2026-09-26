@@ -4,17 +4,23 @@ import { createSupabaseServerClient, isDemoMode } from "@/lib/supabase/server";
 import { ensureDefaultWorkspaceForUser, resolveDefaultWorkspace } from "@/server/services/workspace-service";
 import { prisma } from "@/lib/prisma/client";
 
+type AuthUser = {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown>;
+};
+
 export default async function Page() {
   if (isDemoMode()) {
     return <CalendarShell workspaceId="demo-workspace" timeZone="America/Toronto" />;
   }
 
-  let user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null = null;
+  let user: AuthUser | null = null;
 
   try {
     const supabase = await createSupabaseServerClient();
     const { data } = await supabase.auth.getUser();
-    user = (data?.user as typeof user) ?? null;
+    user = (data?.user as AuthUser | null) ?? null;
   } catch (e) {
     return (
       <div style={{ padding: 32, fontFamily: "system-ui" }}>
