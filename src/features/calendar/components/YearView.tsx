@@ -99,7 +99,7 @@ export function YearView({
         })}
       </div>
       <div className="year-legend" style={{ padding: "8px 4px", fontSize: 11, color: "var(--muted)", display: "flex", gap: 8, alignItems: "center" }}>
-        <span>Event density:</span>
+        <span>{t("eventDensity")}</span>
         <span style={{ display:"inline-flex", gap:4, alignItems:"center" }}><i style={{ width:8,height:8,borderRadius:"50%",background:"var(--line)",display:"inline-block"}}/> none</span>
         <span style={{ display:"inline-flex", gap:4, alignItems:"center" }}><i style={{ width:8,height:8,borderRadius:"50%",background:"color-mix(in srgb, var(--accent) 30%, transparent)",display:"inline-block"}}/> 1</span>
         <span style={{ display:"inline-flex", gap:4, alignItems:"center" }}><i style={{ width:8,height:8,borderRadius:"50%",background:"color-mix(in srgb, var(--accent) 60%, transparent)",display:"inline-block"}}/> 2-3</span>
