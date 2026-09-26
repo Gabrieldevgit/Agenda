@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BellIcon, CloseIcon } from "@/lib/icons";
-import { formatInTimeZone } from "date-fns-tz";
 import { useAppI18n } from "@/lib/i18n";
 
 type Notification = {
@@ -53,7 +52,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
     <div style={{ position: "relative" }}>
       <button
         className="icon"
-        aria-label={`${t("notifications")}${unread ? ` (${unread} unread)` : ""}`}
+        aria-label={`${t("notifications")}${unread ? ` (${unread} ${t("unread")})` : ""}`}
         title={t("notifications")}
         onClick={() => setOpen((v) => !v)}
         style={{ position: "relative" }}
